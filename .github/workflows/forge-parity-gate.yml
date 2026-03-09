@@ -14,6 +14,7 @@ on:
 
 jobs:
   parity-unit-tests:
+    if: ${{ vars.RUSTIC_AI_REPO != '' && vars.PYGO_PARITY_REPO != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout rustic-go
@@ -24,13 +25,13 @@ jobs:
       - name: Checkout rustic-ai
         uses: actions/checkout@v4
         with:
-          repository: ${{ vars.RUSTIC_AI_REPO != '' && vars.RUSTIC_AI_REPO || format('{0}/rustic-ai', github.repository_owner) }}
+          repository: ${{ vars.RUSTIC_AI_REPO }}
           path: rustic-ai
 
       - name: Checkout pygo-parity
         uses: actions/checkout@v4
         with:
-          repository: ${{ vars.PYGO_PARITY_REPO != '' && vars.PYGO_PARITY_REPO || format('{0}/pygo-parity', github.repository_owner) }}
+          repository: ${{ vars.PYGO_PARITY_REPO }}
           path: pygo-parity
 
       - name: Set up Python
@@ -49,6 +50,7 @@ jobs:
         run: make test
 
   parity-gate:
+    if: ${{ vars.RUSTIC_AI_REPO != '' && vars.PYGO_PARITY_REPO != '' }}
     runs-on: ubuntu-latest
     needs: [parity-unit-tests]
     steps:
@@ -60,13 +62,13 @@ jobs:
       - name: Checkout rustic-ai
         uses: actions/checkout@v4
         with:
-          repository: ${{ vars.RUSTIC_AI_REPO != '' && vars.RUSTIC_AI_REPO || format('{0}/rustic-ai', github.repository_owner) }}
+          repository: ${{ vars.RUSTIC_AI_REPO }}
           path: rustic-ai
 
       - name: Checkout pygo-parity
         uses: actions/checkout@v4
         with:
-          repository: ${{ vars.PYGO_PARITY_REPO != '' && vars.PYGO_PARITY_REPO || format('{0}/pygo-parity', github.repository_owner) }}
+          repository: ${{ vars.PYGO_PARITY_REPO }}
           path: pygo-parity
 
       - name: Set up Go
