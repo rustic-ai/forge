@@ -1,0 +1,185 @@
+name: forge CI
+
+on:
+  push:
+    paths:
+      - "forge-go/**"
+      - "forge-python/**"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "forge-go/**"
+      - "forge-python/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./forge-go
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: forge-go/go.mod
+          cache: true
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.64.8
+          install-mode: goinstall
+          working-directory: forge-go
+          args: --timeout=5m
+
+      - name: Run test suite
+        run: go test -v ./...
+
+      - name: Build (linux native)
+        run: go build -o bin/forge ./main.go
+
+  go-native-build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: ./forge-go
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: forge-go/go.mod
+          cache: true
+
+      - name: Build (native)
+        run: go build -o bin/forge ./main.go
+
+  go-cross-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: ""
+          - goos: linux
+            goarch: arm64
+            suffix: ""
+          - goos: darwin
+            goarch: amd64
+            suffix: ""
+          - goos: darwin
+            goarch: arm64
+            suffix: ""
+          - goos: windows
+            goarch: amd64
+            suffix: ".exe"
+          - goos: windows
+            goarch: arm64
+            suffix: ".exe"
+    defaults:
+      run:
+        working-directory: ./forge-go
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: forge-go/go.mod
+          cache: true
+
+      - name: Cross compile
+        run: |
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+            go build -o dist/forge-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} ./main.go
+
+      - name: Upload cross-build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: forge-go/dist/forge-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+
+  python-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./forge-python
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.5"
+          enable-cache: true
+          cache-dependency-glob: forge-python/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Lint
+        run: uv run --frozen ruff check src tests
+
+      - name: Static compile check
+        run: uv run --frozen python -m compileall src tests
+
+      - name: Build package
+        run: uv build
+
+      - name: Run Pytest
+        run: uv run --frozen pytest
+
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: forge-go/go.mod
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.5"
+          enable-cache: true
+          cache-dependency-glob: forge-python/uv.lock
+
+      - name: Install forge-python dependencies
+        working-directory: ./forge-python
+        run: uv sync --frozen --group dev
+
+      - name: Run Contract Tests
+        working-directory: ./forge-python
+        run: uv run --frozen pytest tests/contract/

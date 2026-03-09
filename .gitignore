@@ -17,6 +17,7 @@ bin/
 dist/
 /forge
 /forge-go/forge
+/forge-go/testutil/contract/contract_helper
 vendor/
 coverage.txt
 coverage.out

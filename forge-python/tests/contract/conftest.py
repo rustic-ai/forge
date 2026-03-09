@@ -1,4 +1,5 @@
 import sys
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -20,12 +21,11 @@ class DummyModule:
 
 SKIPPED_YAML_FILES = {"code_review_guild.yaml", "test_react_guild.yaml"}
 
-HELPER_BIN = (
+HELPER_SRC_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
     / "forge-go"
     / "testutil"
     / "contract"
-    / "contract_helper"
 )
 FIXTURES_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -60,11 +60,18 @@ def fixture_yaml_files():
     return get_fixture_yaml_files()
 
 
-@pytest.fixture
-def helper_bin():
-    if not HELPER_BIN.exists():
+@pytest.fixture(scope="session")
+def helper_bin(tmp_path_factory):
+    helper_dir = tmp_path_factory.mktemp("contract-helper")
+    helper_bin = helper_dir / "contract_helper"
+    result = subprocess.run(
+        ["go", "build", "-o", str(helper_bin), "main.go"],
+        cwd=str(HELPER_SRC_DIR),
+        capture_output=True,
+    )
+    if result.returncode != 0:
         pytest.fail(
-            f"Helper binary not found at {HELPER_BIN}. "
-            "Run 'go build -o contract_helper main.go' in forge-go/testutil/contract/"
+            "Failed to build contract helper from source: "
+            + result.stderr.decode("utf-8")
         )
-    return HELPER_BIN
+    return helper_bin

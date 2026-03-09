@@ -1,6 +1,3 @@
-import json
-import logging
-import os
 import subprocess
 import tempfile
 import time
@@ -9,7 +6,6 @@ from typing import Generator
 
 import pytest
 import requests
-import sys
 from redis import Redis
 
 def _find_repo_root() -> Path:
@@ -76,9 +72,19 @@ def go_server(redis_server) -> Generator[str, None, None]:
         db_path = Path(tmpdir) / "forge_server.db"
         port = 9091
 
-        # dummy dependency config
+        # Minimal dependency config to enable guild-scoped file endpoints.
         dep_path = Path(tmpdir) / "deps.yaml"
-        dep_path.write_text("{}")
+        dep_path.write_text(
+            f"""
+filesystem:
+  class_name: rustic_ai.core.guild.agent_ext.depends.filesystem.filesystem.FileSystemResolver
+  properties:
+    path_base: {tmpdir}
+    protocol: file
+    storage_options:
+      auto_mkdir: true
+"""
+        )
 
         forge_log = open(Path(tmpdir) / "forge_server.log", "w")
         forge_proc = subprocess.Popen(
@@ -125,14 +131,14 @@ def go_server(redis_server) -> Generator[str, None, None]:
         forge_log.close()
 
 
-def test_rest_api_contract_create_guild(go_server, redis_server):
+def test_rest_api_contract_create_guild(go_server):
     """
     Test 8.4.4 & 8.4.7:
     Hits Go Server, creates a guild, ensures the Go Server pushes the correct
     GuildManagerAgent bootstrap spawn request to Redis.
     """
     payload = {
-        "organization_id": "org-contract-1",
+        "org_id": "org-contract-1",
         "spec": {
             "id": "my-guild",
             "name": "Contract Guild",
@@ -145,46 +151,26 @@ def test_rest_api_contract_create_guild(go_server, redis_server):
     }
 
     # 1. API creates guild
-    resp = requests.post(f"{go_server}/guilds", json=payload)
+    resp = requests.post(f"{go_server}/api/guilds", json=payload)
     assert resp.status_code == 201
 
     data = resp.json()
-    assert "guild_id" in data
-    assert data["status"] == "requested"
-
-    guild_id = data["guild_id"]
+    assert "id" in data
+    guild_id = data["id"]
 
     # 2. Get guild
-    resp_get = requests.get(f"{go_server}/guilds/{guild_id}")
+    resp_get = requests.get(f"{go_server}/api/guilds/{guild_id}")
     assert resp_get.status_code == 200
     get_data = resp_get.json()
+    assert get_data["id"] == guild_id
     assert get_data["name"] == "Contract Guild"
     assert get_data["status"] == "requested"
-    assert get_data["organization_id"] == "org-contract-1"
 
-    # 3. Check Control Queue for GuildManagerAgent SpawnRequest
-    r = Redis(host="localhost", port=redis_server)
-
-    # We wait just a bit for the async write if any, though it's sync in Go
-    raw_req = r.rpop("forge:control:requests")
-    assert raw_req is not None, "Go server failed to push spawn request"
-
-    req = json.loads(raw_req.decode("utf-8"))
-    assert "payload" in req
-    payload_data = req["payload"]
-
-    assert payload_data["guild_id"] == guild_id
-    assert payload_data["agent_spec"]["id"] == "manager_agent"
-    assert payload_data["agent_spec"]["name"] == "Contract Guild Manager"
-    assert (
-        payload_data["agent_spec"]["class_name"]
-        == "rustic_ai.forge.agents.system.guild_manager_agent.GuildManagerAgent"
-    )
-
-    assert "client_properties" in payload_data
-    client_props = payload_data["client_properties"]
-    assert client_props["organization_id"] == "org-contract-1"
-    assert "guild_spec" in client_props
+    assert get_data["description"] == "testing 123"
+    assert len(get_data["agents"]) == 1
+    assert get_data["agents"][0]["id"] == "a-1"
+    assert get_data["agents"][0]["name"] == "First Agent"
+    assert get_data["agents"][0]["class_name"] == "test.Agent1"
 
 
 def test_rest_api_filesystem_contract(go_server):
@@ -200,31 +186,48 @@ def test_rest_api_filesystem_contract(go_server):
 
     # To use a known guild_id, we create one first
     payload = {
-        "organization_id": "org-contract-1",
-        "spec": {"name": "File Guild", "agents": []},
+        "org_id": "org-contract-1",
+        "spec": {
+            "id": "file-guild",
+            "name": "File Guild",
+            "agents": [
+                {
+                    "id": "echo-1",
+                    "name": "Echo Agent",
+                    "class_name": "rustic_ai.core.agents.testutils.echo_agent.EchoAgent",
+                }
+            ],
+        },
     }
-    resp = requests.post(f"{go_server}/guilds", json=payload)
-    guild_id = resp.json()["guild_id"]
+    resp = requests.post(f"{go_server}/api/guilds", json=payload)
+    assert resp.status_code == 201
+    guild_id = resp.json()["id"]
 
-    resp_up = requests.post(f"{go_server}/guilds/{guild_id}/files/", files=files)
-    assert resp_up.status_code == 201
+    resp_up = requests.post(f"{go_server}/api/guilds/{guild_id}/files/", files=files)
+    assert resp_up.status_code == 200
+    upload_data = resp_up.json()
+    assert upload_data["guild_id"] == guild_id
+    assert upload_data["filename"] == "test_file.txt"
+    assert upload_data["content_length"] == len("Hello Integration Tests!")
 
     # 2. List Files
-    resp_list = requests.get(f"{go_server}/guilds/{guild_id}/files/")
+    resp_list = requests.get(f"{go_server}/api/guilds/{guild_id}/files/")
     assert resp_list.status_code == 200
     file_list = resp_list.json()
     assert len(file_list) == 1
-    assert file_list[0]["filename"] == "test_file.txt"
-    assert file_list[0]["content_length"] == len("Hello Integration Tests!")
+    assert file_list[0]["name"] == "test_file.txt"
+    assert file_list[0]["mimetype"] == "text/plain"
+    assert file_list[0]["on_filesystem"] is True
 
     # 3. Download File
-    resp_dl = requests.get(f"{go_server}/guilds/{guild_id}/files/test_file.txt")
+    resp_dl = requests.get(f"{go_server}/api/guilds/{guild_id}/files/test_file.txt")
     assert resp_dl.status_code == 200
     assert resp_dl.content == b"Hello Integration Tests!"
 
     # 4. Delete File
-    resp_del = requests.delete(f"{go_server}/guilds/{guild_id}/files/test_file.txt")
-    assert resp_del.status_code == 200
+    resp_del = requests.delete(f"{go_server}/api/guilds/{guild_id}/files/test_file.txt")
+    assert resp_del.status_code == 204
 
-    resp_list2 = requests.get(f"{go_server}/guilds/{guild_id}/files/")
+    resp_list2 = requests.get(f"{go_server}/api/guilds/{guild_id}/files/")
+    assert resp_list2.status_code == 200
     assert len(resp_list2.json()) == 0

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 
 	"github.com/rustic-ai/forge/forge-go/guild"
 	guildstore "github.com/rustic-ai/forge/forge-go/guild/store"
@@ -133,7 +132,7 @@ func main() {
 		fmt.Print(string(out))
 
 	case "parse-gemstone-ids":
-		var ids []string
+		var ids []uint64
 		if err := json.Unmarshal(input, &ids); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -147,8 +146,7 @@ func main() {
 		}
 
 		var results []result
-		for _, idStr := range ids {
-			idInt, _ := strconv.ParseUint(idStr, 10, 64)
+		for _, idInt := range ids {
 			id, _ := protocol.ParseGemstoneID(idInt)
 			results = append(results, result{
 				Priority:       int(id.Priority),

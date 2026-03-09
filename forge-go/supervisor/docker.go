@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/redis/go-redis/v9"
@@ -92,7 +92,7 @@ func (d *DockerSupervisor) ensureImage(ctx context.Context, imageRef string) err
 		return nil
 	}
 
-	out, err := d.cli.ImagePull(ctx, imageRef, types.ImagePullOptions{})
+	out, err := d.cli.ImagePull(ctx, imageRef, image.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull image %s: %w", imageRef, err)
 	}
@@ -210,7 +210,7 @@ func (d *DockerSupervisor) Launch(ctx context.Context, guildID string, agentSpec
 	}
 
 	startBootTime := time.Now()
-	if err := d.cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+	if err := d.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 	telemetry.SupervisorBootDuration.WithLabelValues("local-node", "docker").Observe(time.Since(startBootTime).Seconds())
@@ -300,7 +300,7 @@ func (d *DockerSupervisor) monitorContainer(ctx context.Context, guildID string,
 		if agent.IsStopRequested() {
 			return
 		}
-		_ = d.cli.ContainerRemove(ctx, agent.ContainerID, types.ContainerRemoveOptions{Force: true})
+		_ = d.cli.ContainerRemove(ctx, agent.ContainerID, container.RemoveOptions{Force: true})
 
 		if err := d.relaunchContainer(ctx, guildID, agent, agentSpec, reg, env); err != nil {
 			logger.Error("failed to restart container", "error", err)
@@ -352,7 +352,7 @@ func (d *DockerSupervisor) relaunchContainer(ctx context.Context, guildID string
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
-	if err := d.cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+	if err := d.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -376,7 +376,7 @@ func (d *DockerSupervisor) relaunchContainer(ctx context.Context, guildID string
 func (d *DockerSupervisor) streamLogs(ctx context.Context, guildID, agentID, containerID string) {
 	logger := slog.With("agent_id", agentID, "guild_id", guildID, "node_id", "local-docker")
 
-	options := types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true}
+	options := container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true}
 	out, err := d.cli.ContainerLogs(ctx, containerID, options)
 	if err != nil {
 		logger.Error("failed to attach to container logs", "error", err)
@@ -429,7 +429,7 @@ func (d *DockerSupervisor) pollStats(ctx context.Context, guildID, agentID, cont
 				continue
 			}
 
-			var v types.StatsJSON
+			var v container.StatsResponse
 			if err := json.NewDecoder(stats.Body).Decode(&v); err == nil {
 				cpuDelta := v.CPUStats.CPUUsage.TotalUsage - v.PreCPUStats.CPUUsage.TotalUsage
 				systemDelta := v.CPUStats.SystemUsage - v.PreCPUStats.SystemUsage
@@ -467,7 +467,7 @@ func (d *DockerSupervisor) Stop(ctx context.Context, guildID, agentID string) er
 		slog.Warn("failed to stop container", "container_id", agent.ContainerID, "error", err)
 	}
 
-	_ = d.cli.ContainerRemove(ctx, agent.ContainerID, types.ContainerRemoveOptions{Force: true})
+	_ = d.cli.ContainerRemove(ctx, agent.ContainerID, container.RemoveOptions{Force: true})
 
 	d.mu.Lock()
 	agent.State = StateStopped

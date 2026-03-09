@@ -1,6 +1,5 @@
 import json
 import subprocess
-from dataclasses import dataclass
 
 import pytest
 from rustic_ai.core.utils.gemstone_id import GemstoneGenerator, GemstoneID

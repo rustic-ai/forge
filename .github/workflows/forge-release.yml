@@ -1,17 +1,219 @@
 name: forge Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to tag, for example 0.0.2
+        required: true
+        type: string
+      publish_target:
+        description: Python package index to publish to
+        required: true
+        default: pypi
+        type: choice
+        options:
+          - pypi
+          - testpypi
   push:
     tags:
-      - "forge/v*"
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forge-release
+  cancel-in-progress: false
 
 jobs:
-  release:
+  prepare-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      publish_target: ${{ steps.meta.outputs.publish_target }}
+      skip_release: ${{ steps.meta.outputs.skip_release }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          event_name="${GITHUB_EVENT_NAME}"
+          actor="${GITHUB_ACTOR}"
+          skip_release="false"
+
+          if [[ "$event_name" == "workflow_dispatch" ]]; then
+            raw_version="${{ inputs.version }}"
+            version="${raw_version#v}"
+            tag="v${version}"
+            publish_target="${{ inputs.publish_target }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            version="${tag#v}"
+            publish_target="pypi"
+            tag_contents="$(git for-each-ref --format='%(contents)' "refs/tags/${tag}")"
+            if grep -q '^publish_target=testpypi$' <<<"$tag_contents"; then
+              publish_target="testpypi"
+            fi
+            if [[ "$actor" == "github-actions[bot]" ]]; then
+              skip_release="true"
+            fi
+          fi
+
+          if [[ "$tag" == "$version" ]]; then
+            echo "Expected a semver tag like v0.0.2, got: $tag" >&2
+            exit 1
+          fi
+
+          py_version="$(python -c "import tomllib; from pathlib import Path; print(tomllib.load(Path('forge-python/pyproject.toml').open('rb'))['project']['version'])")"
+          go_version="$(python -c "import re; from pathlib import Path; text = Path('forge-go/version/version.go').read_text(); match = re.search(r'Version\\s*=\\s*\"([^\"]+)\"', text); assert match, 'failed to parse forge-go/version/version.go'; print(match.group(1))")"
+
+          if [[ "$py_version" != "$version" ]]; then
+            echo "forge-python version $py_version does not match requested release $version" >&2
+            exit 1
+          fi
+
+          if [[ "$go_version" != "$version" ]]; then
+            echo "forge-go version $go_version does not match requested release $version" >&2
+            exit 1
+          fi
+
+          if [[ "$event_name" == "workflow_dispatch" ]]; then
+            if git rev-parse "$tag" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "Tag $tag already exists" >&2
+              exit 1
+            fi
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "$(printf 'Release %s\n\npublish_target=%s\n' "$tag" "$publish_target")"
+            git push origin "refs/tags/$tag"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish_target=$publish_target" >> "$GITHUB_OUTPUT"
+          echo "skip_release=$skip_release" >> "$GITHUB_OUTPUT"
+
+  verify-release:
+    runs-on: ubuntu-latest
+    needs: prepare-release
+    if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: forge-go/go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.5"
+          enable-cache: true
+          cache-dependency-glob: forge-python/uv.lock
+
+      - name: Lint Go
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.64.8
+          install-mode: goinstall
+          working-directory: forge-go
+          args: --timeout=5m
+
+      - name: Test Go
+        working-directory: forge-go
+        run: go test -v ./...
+
+      - name: Install forge-python dependencies
+        working-directory: forge-python
+        run: uv sync --frozen --group dev
+
+      - name: Lint Python
+        working-directory: forge-python
+        run: uv run --frozen ruff check src tests
+
+      - name: Static compile check
+        working-directory: forge-python
+        run: uv run --frozen python -m compileall src tests
+
+      - name: Build Python package
+        working-directory: forge-python
+        run: uv build
+
+      - name: Run Python tests
+        working-directory: forge-python
+        run: uv run --frozen pytest
+
+      - name: Run Contract Tests
+        working-directory: forge-python
+        run: uv run --frozen pytest tests/contract/
+
+  build-python:
+    runs-on: ubuntu-latest
+    needs: [prepare-release, verify-release]
+    if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.5"
+          enable-cache: true
+          cache-dependency-glob: forge-python/uv.lock
+
+      - name: Build python distributions
+        working-directory: forge-python
+        run: uv build
+
+      - name: Upload python distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist-${{ needs.prepare-release.outputs.version }}
+          path: forge-python/dist/*
+
+  release-go:
+    runs-on: ubuntu-latest
+    needs: [prepare-release, verify-release]
+    if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.tag }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -23,8 +225,43 @@ jobs:
         uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
-          version: latest
+          version: v2.14.3
           workdir: forge-go
           args: release --clean --config .goreleaser.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-python:
+    runs-on: ubuntu-latest
+    needs: [prepare-release, verify-release, build-python, release-go]
+    if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
+    environment:
+      name: ${{ needs.prepare-release.outputs.publish_target }}
+      url: ${{ needs.prepare-release.outputs.publish_target == 'testpypi' && 'https://test.pypi.org/p/rusticai-forge' || 'https://pypi.org/p/rusticai-forge' }}
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Download python distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-dist-${{ needs.prepare-release.outputs.version }}
+          path: dist
+
+      - name: Attach python distributions to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.prepare-release.outputs.tag }}" dist/* --clobber
+
+      - name: Publish python distributions to PyPI
+        if: ${{ needs.prepare-release.outputs.publish_target == 'pypi' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+      - name: Publish python distributions to TestPyPI
+        if: ${{ needs.prepare-release.outputs.publish_target == 'testpypi' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          repository-url: https://test.pypi.org/legacy/

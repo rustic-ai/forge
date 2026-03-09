@@ -67,6 +67,7 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) buildRouter() *gin.Engine {
 	router := gin.New()
 	router.RedirectTrailingSlash = true
+	router.GET("/ping", s.Healthz)
 
 	router.POST("/manager/guilds/ensure", wrapHTTPWithPathValues(s.HandleManagerEnsureGuild))
 	router.GET("/manager/guilds/:guild_id/spec", wrapHTTPWithPathValues(s.HandleManagerGetGuildSpec, "guild_id"))

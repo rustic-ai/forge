@@ -50,6 +50,10 @@ logger = logging.getLogger(__name__)
 
 
 class TestForgeRedisIntegration(IntegrationTestABC):
+    @pytest.fixture
+    def guild_id(self) -> str:
+        return "e2e-guild-1"
+
     @pytest.fixture(scope="module")
     def redis_server(self) -> Generator[int, None, None]:
         # Start a local redis-server
@@ -112,6 +116,7 @@ class TestForgeRedisIntegration(IntegrationTestABC):
             f"{ResponderProbeAgent.__module__}.{ResponderProbeAgent.__name__}"
         )
         local_cls = f"{LocalTestAgent.__module__}.{LocalTestAgent.__name__}"
+        echo_cls = "rustic_ai.core.agents.testutils.echo_agent.EchoAgent"
 
         python_bin = sys.executable
 
@@ -138,6 +143,11 @@ entries:
     runtime: binary
     executable: "{python_bin}"
     args: ["-m", "rustic_ai.forge.agent_runner"]
+  - id: echo
+    class_name: {echo_cls}
+    runtime: binary
+    executable: "{python_bin}"
+    args: ["-m", "rustic_ai.forge.agent_runner"]
 """
             reg_path = Path(tmpdir) / "registry.yaml"
             reg_path.write_text(registry_yaml)
@@ -154,19 +164,7 @@ entries:
                 )
 
             db_path = Path(tmpdir) / "forge.db"
-
-            # Because forge requires a guild spec to start the control queue loop with run
-            # wait, `forge run` needs a SPEC file. If we pass a dummy spec file, it will run.
-            # But the Python IntegrationTestABC creates agents dynamically and launches them!
-            # It will push SpawnRequests to Redis. The Go Daemon will pick them up!
-            spec_yaml = """
-id: test_guild_id
-name: Test Guild
-description: Dummy guild for integration logic
-agents: []
-"""
-            spec_path = Path(tmpdir) / "spec.yaml"
-            spec_path.write_text(spec_yaml)
+            spec_path = REPO_ROOT / "forge-go" / "testutil" / "e2e" / "testdata" / "echo-guild.yaml"
 
             env = os.environ.copy()
             env["REDIS_HOST"] = "localhost"

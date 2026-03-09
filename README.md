@@ -21,7 +21,7 @@ import "github.com/rustic-ai/forge/forge-go/<package>"
 
 - Go `1.25+`
 - Python `3.13`
-- Poetry
+- `uv`
 - `uvx` available on PATH
 - Docker (required for some integration/e2e scenarios)
 
@@ -105,14 +105,14 @@ Install and run tests:
 export FORGE_REPO_DIR="/absolute/path/to/forge"
 
 cd "$FORGE_REPO_DIR/forge-python"
-poetry install
-poetry run pytest
+uv sync --group dev
+uv run pytest
 ```
 
 Contract-only tests:
 
 ```bash
-poetry run pytest tests/contract/
+uv run pytest tests/contract/
 ```
 
 ## Rustic AI Integration Dependencies

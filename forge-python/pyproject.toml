@@ -1,26 +1,35 @@
-[tool.poetry]
+[project]
 name = "rusticai-forge"
-version = "0.1.0"
+version = "0.0.2"
 description = "Python agent wrapper and execution engine for Forge"
-packages = [{ include = "rustic_ai", from = "src" }]
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "pydantic>=2.12.5,<3.0.0",
+    "redis>=6.4.0,<7.0.0",
+    # DO NOT CHANGE THESE TO LOCAL FILE PATHS. Always use package references.
+    "rusticai-core>=1.1.0,<2.0.0",
+    "rusticai-redis>=1.1.0,<2.0.0",
+    "psycopg[binary]>=3.3.3,<4.0.0",
+    "httpx>=0.28.1,<1.0.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.13,<3.14"
-pydantic = "*"
-redis = "*"
-# DO NOT CHANGE THESE TO LOCAL FILE PATHS. Always use package references.
-rusticai-core = ">=1.1.0"
-rusticai-redis = ">=1.1.0"
-psycopg = { version = ">=3.2.0", extras = ["binary"] }
-httpx = "*"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-requests = "*"
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2,<10.0.0",
+    "requests>=2.32.5,<3.0.0",
+    "ruff>=0.13.1,<0.14.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
