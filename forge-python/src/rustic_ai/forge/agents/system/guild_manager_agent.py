@@ -27,7 +27,10 @@ from rustic_ai.core.agents.system.models import (
     UserAgentCreationResponse,
     UserAgentGetRequest,
 )
-from rustic_ai.core.agents.utils.user_proxy_agent import UserProxyAgent, UserProxyAgentProps
+from rustic_ai.core.agents.utils.user_proxy_agent import (
+    UserProxyAgent,
+    UserProxyAgentProps,
+)
 from rustic_ai.core.guild import Agent, AgentSpec, GuildTopics, agent
 from rustic_ai.core.guild.agent import ProcessContext, SelfReadyNotification, processor
 from rustic_ai.core.guild.agent_ext.mixins.health import (
@@ -55,8 +58,13 @@ from rustic_ai.core.utils.basic_class_utils import get_qualified_class_name
 from rustic_ai.core.utils.class_utils import get_state_manager
 from rustic_ai.core.utils.priority import Priority
 
-from rustic_ai.forge.agents.system.guild_manager_agent_props import GuildManagerAgentProps
-from rustic_ai.forge.metastore.manager_client import ManagerAPIError, ManagerMetastoreClient
+from rustic_ai.forge.agents.system.guild_manager_agent_props import (
+    GuildManagerAgentProps,
+)
+from rustic_ai.forge.metastore.manager_client import (
+    ManagerAPIError,
+    ManagerMetastoreClient,
+)
 
 
 class GuildManagerAgent(Agent[GuildManagerAgentProps]):
@@ -193,10 +201,14 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
         if guild_status == GuildStatus.PENDING_LAUNCH:
             logging.info("Guild Manager launching guild %s", self.guild_id)
-            self.guild = GuildBuilder.from_spec(persisted_spec).launch(self.organization_id)
+            self.guild = GuildBuilder.from_spec(persisted_spec).launch(
+                self.organization_id
+            )
         else:
             logging.info("Guild Manager loading guild %s", self.guild_id)
-            self.guild = GuildBuilder.from_spec(persisted_spec).load_or_launch(self.organization_id)
+            self.guild = GuildBuilder.from_spec(persisted_spec).load_or_launch(
+                self.organization_id
+            )
 
         self.guild.register_agent(self.get_spec())
         self.metastore.ensure_agent(self.guild_id, self.get_spec())
@@ -207,7 +219,12 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
                 priority=Priority.NORMAL,
                 format=get_qualified_class_name(AgentsHealthReport),
                 payload=AgentsHealthReport.model_validate(
-                    {"agents": {k: Heartbeat.model_validate(v) for k, v in self.agent_health.items()}}
+                    {
+                        "agents": {
+                            k: Heartbeat.model_validate(v)
+                            for k, v in self.agent_health.items()
+                        }
+                    }
                 ).model_dump(),
                 topics=[GuildTopics.GUILD_STATUS_TOPIC],
             )
@@ -221,7 +238,8 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
     @processor(
         SelfReadyNotification,
-        predicate=lambda self, msg: msg.sender == self.get_agent_tag() and msg.topic_published_to == self._self_inbox,
+        predicate=lambda self, msg: msg.sender == self.get_agent_tag()
+        and msg.topic_published_to == self._self_inbox,
         handle_essential=True,
     )
     def launch_guild_agents(self, ctx: ProcessContext[SelfReadyNotification]) -> None:
@@ -268,7 +286,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
         try:
             self.guild.remove_agent(rar.agent_id)
         except ValueError:
-            logging.warning("Agent %s was not running when remove was requested", rar.agent_id)
+            logging.warning(
+                "Agent %s was not running when remove was requested", rar.agent_id
+            )
 
         status_resp = self.metastore.update_agent_status(
             self.guild_id,
@@ -313,7 +333,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
         self._announce_guild_refresh(ctx)
 
     @processor(RemoveRoutingRuleRequest)
-    def remove_routing_rule(self, ctx: ProcessContext[RemoveRoutingRuleRequest]) -> None:
+    def remove_routing_rule(
+        self, ctx: ProcessContext[RemoveRoutingRuleRequest]
+    ) -> None:
         if self.guild is None:
             raise RuntimeError("Guild is not initialized")
 
@@ -329,7 +351,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
             )
             return
 
-        self.guild.routes.steps = [step for step in self.guild.routes.steps if step.hashid != target_hashid]
+        self.guild.routes.steps = [
+            step for step in self.guild.routes.steps if step.hashid != target_hashid
+        ]
 
         ctx.send(
             RoutingRuleUpdateResponse(
@@ -347,7 +371,11 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
         alr = ctx.payload
         if alr.guild_id != self.guild_id:
-            ctx.send(BadInputResponse(error_field="guild_id", message=f"Invalid guild id: {alr.guild_id}"))
+            ctx.send(
+                BadInputResponse(
+                    error_field="guild_id", message=f"Invalid guild id: {alr.guild_id}"
+                )
+            )
             return
 
         agents: List[AgentInfoResponse] = [
@@ -464,7 +492,12 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
         if agent_health_response.state:
             health_report = AgentsHealthReport.model_validate(
-                {"agents": {k: Heartbeat.model_validate(v) for k, v in agent_health_response.state.items()}}
+                {
+                    "agents": {
+                        k: Heartbeat.model_validate(v)
+                        for k, v in agent_health_response.state.items()
+                    }
+                }
             )
             new_agent_status = self._process_heartbeat_and_update_status(
                 heartbeat,
@@ -487,7 +520,11 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
         alr = ctx.payload
         if alr.guild_id != self.guild_id:
-            ctx.send(BadInputResponse(error_field="guild_id", message=f"Invalid guild id: {alr.guild_id}"))
+            ctx.send(
+                BadInputResponse(
+                    error_field="guild_id", message=f"Invalid guild id: {alr.guild_id}"
+                )
+            )
             return
 
         agents: List[AgentInfoResponse] = [
@@ -508,12 +545,20 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
         agr = ctx.payload
         if agr.guild_id != self.guild_id:
-            ctx.send(BadInputResponse(error_field="guild_id", message=f"Invalid guild id: {agr.guild_id}"))
+            ctx.send(
+                BadInputResponse(
+                    error_field="guild_id", message=f"Invalid guild id: {agr.guild_id}"
+                )
+            )
             return
 
         guild_agent = self.guild.get_agent(agr.agent_id)
         if not guild_agent:
-            ctx.send(BadInputResponse(error_field="agent_id", message=f"Invalid agent id: {agr.agent_id}"))
+            ctx.send(
+                BadInputResponse(
+                    error_field="agent_id", message=f"Invalid agent id: {agr.agent_id}"
+                )
+            )
             return
 
         ctx.send(
@@ -526,7 +571,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
         )
 
     @processor(UserAgentCreationRequest)
-    def create_user_agent(self, ctx: agent.ProcessContext[UserAgentCreationRequest]) -> None:
+    def create_user_agent(
+        self, ctx: agent.ProcessContext[UserAgentCreationRequest]
+    ) -> None:
         if self.guild is None:
             raise RuntimeError("Guild is not initialized")
 
@@ -549,8 +596,12 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
             .set_properties(UserProxyAgentProps(user_id=uacr.user_id))
             .add_additional_topic(UserProxyAgent.get_user_inbox_topic(uacr.user_id))
             .add_additional_topic(UserProxyAgent.get_user_outbox_topic(uacr.user_id))
-            .add_additional_topic(UserProxyAgent.get_user_system_notifications_topic(uacr.user_id))
-            .add_additional_topic(UserProxyAgent.get_user_system_requests_topic(uacr.user_id))
+            .add_additional_topic(
+                UserProxyAgent.get_user_system_notifications_topic(uacr.user_id)
+            )
+            .add_additional_topic(
+                UserProxyAgent.get_user_system_requests_topic(uacr.user_id)
+            )
             .add_additional_topic(GuildTopics.GUILD_STATUS_TOPIC)
             .add_additional_topic(UserProxyAgent.BROADCAST_TOPIC)
             .build_spec()
@@ -594,7 +645,11 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
         user_id = ctx.payload.user_id
         user_agent = self.guild.get_agent(UserProxyAgent.get_user_agent_id(user_id))
         if not user_agent:
-            ctx.send(BadInputResponse(error_field="user_id", message=f"Invalid user id: {user_id}"))
+            ctx.send(
+                BadInputResponse(
+                    error_field="user_id", message=f"Invalid user id: {user_id}"
+                )
+            )
             return
 
         ctx.send(
@@ -620,11 +675,15 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
                 topics=[GuildTopics.STATE_TOPIC],
             )
         except Exception as err:
-            ctx.send_error(StateFetchError(state_fetch_request=ctx.payload, error=str(err)))
+            ctx.send_error(
+                StateFetchError(state_fetch_request=ctx.payload, error=str(err))
+            )
 
     @processor(StateUpdateRequest, handle_essential=True)
     def update_state_handler(self, ctx: ProcessContext[StateUpdateRequest]) -> None:
-        if getattr(self, "_shutting_down", False) and getattr(self, "_is_shutdown", False):
+        if getattr(self, "_shutting_down", False) and getattr(
+            self, "_is_shutdown", False
+        ):
             return
 
         if self.guild is None:
@@ -639,7 +698,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
                 topics=[GuildTopics.STATE_TOPIC],
             )
         except Exception as err:
-            ctx.send_error(StateUpdateError(state_update_request=ctx.payload, error=str(err)))
+            ctx.send_error(
+                StateUpdateError(state_update_request=ctx.payload, error=str(err))
+            )
 
     @processor(StopGuildRequest, handle_essential=True)
     def stop_guild(self, ctx: ProcessContext[StopGuildRequest]) -> None:
@@ -669,7 +730,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
     @processor(HealthCheckRequest, handle_essential=True)
     def send_heartbeat(self, ctx: ProcessContext[HealthCheckRequest]):
-        if getattr(self, "_shutting_down", False) and getattr(self, "_is_shutdown", False):
+        if getattr(self, "_shutting_down", False) and getattr(
+            self, "_is_shutdown", False
+        ):
             return
 
         status = HeartbeatStatus.OK
@@ -684,7 +747,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
         checkmeta["qos_latency"] = qos_latency
         checkmeta["observed_latency"] = msg_latency
 
-        ctx.send(Heartbeat(checktime=checktime, checkstatus=status, checkmeta=checkmeta))
+        ctx.send(
+            Heartbeat(checktime=checktime, checkstatus=status, checkmeta=checkmeta)
+        )
 
         if not self.launch_triggered:
             self._launch_guild_agents(ctx)

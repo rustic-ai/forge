@@ -8,6 +8,7 @@ import pytest
 import requests
 from redis import Redis
 
+
 def _find_repo_root() -> Path:
     cur = Path(__file__).resolve()
     for candidate in [cur] + list(cur.parents):
@@ -16,7 +17,9 @@ def _find_repo_root() -> Path:
         nested = candidate / "rustic-go"
         if (nested / "forge-go").is_dir() and (nested / "forge-python").is_dir():
             return nested
-    raise RuntimeError("unable to locate repo root containing forge-go and forge-python")
+    raise RuntimeError(
+        "unable to locate repo root containing forge-go and forge-python"
+    )
 
 
 repo_root = _find_repo_root()

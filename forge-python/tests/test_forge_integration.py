@@ -11,6 +11,7 @@ from redis import Redis
 
 import sys
 
+
 def _find_repo_root() -> Path:
     cur = Path(__file__).resolve()
     for candidate in [cur] + list(cur.parents):
@@ -19,7 +20,9 @@ def _find_repo_root() -> Path:
         nested = candidate / "rustic-go"
         if (nested / "forge-go").is_dir() and (nested / "forge-python").is_dir():
             return nested
-    raise RuntimeError("unable to locate repo root containing forge-go and forge-python")
+    raise RuntimeError(
+        "unable to locate repo root containing forge-go and forge-python"
+    )
 
 
 # Add rustic-ai/core/tests to sys.path so we can import integration base helpers.
@@ -164,7 +167,14 @@ entries:
                 )
 
             db_path = Path(tmpdir) / "forge.db"
-            spec_path = REPO_ROOT / "forge-go" / "testutil" / "e2e" / "testdata" / "echo-guild.yaml"
+            spec_path = (
+                REPO_ROOT
+                / "forge-go"
+                / "testutil"
+                / "e2e"
+                / "testdata"
+                / "echo-guild.yaml"
+            )
 
             env = os.environ.copy()
             env["REDIS_HOST"] = "localhost"

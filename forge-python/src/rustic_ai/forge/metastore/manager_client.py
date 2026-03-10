@@ -46,7 +46,9 @@ class ManagerMetastoreClient:
     def __exit__(self, *_: Any) -> None:
         self.close()
 
-    def ensure_guild(self, guild_spec: GuildSpec, organization_id: str) -> dict[str, Any]:
+    def ensure_guild(
+        self, guild_spec: GuildSpec, organization_id: str
+    ) -> dict[str, Any]:
         payload = {
             "guild_spec": guild_spec.model_dump(mode="json", exclude_none=True),
             "organization_id": organization_id,
@@ -65,7 +67,9 @@ class ManagerMetastoreClient:
     def ensure_agent(self, guild_id: str, agent_spec: AgentSpec) -> dict[str, Any]:
         gid = quote(guild_id, safe="")
         payload = agent_spec.model_dump(mode="json", exclude_none=True)
-        return self._request("POST", f"/manager/guilds/{gid}/agents/ensure", json=payload)
+        return self._request(
+            "POST", f"/manager/guilds/{gid}/agents/ensure", json=payload
+        )
 
     def update_agent_status(
         self,
@@ -112,7 +116,9 @@ class ManagerMetastoreClient:
         )
 
     def _request(self, method: str, path: str, *, json: Any = None) -> dict[str, Any]:
-        response = self._client.request(method, path, json=json, headers=self._auth_headers)
+        response = self._client.request(
+            method, path, json=json, headers=self._auth_headers
+        )
 
         if response.is_success:
             if response.status_code == 204 or not response.content:
@@ -127,7 +133,9 @@ class ManagerMetastoreClient:
         except Exception:
             pass
 
-        raise ManagerAPIError(f"manager api {method} {path} failed ({response.status_code}): {message}")
+        raise ManagerAPIError(
+            f"manager api {method} {path} failed ({response.status_code}): {message}"
+        )
 
 
 def _enum_wire_value(value: Any) -> Any:

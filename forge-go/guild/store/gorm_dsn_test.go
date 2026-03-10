@@ -53,4 +53,3 @@ func TestResolveDriverAndDSN(t *testing.T) {
 		})
 	}
 }
-

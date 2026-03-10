@@ -132,15 +132,15 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 	// Retrying because it takes a moment for UV to download and start python processes
 	replyTopic := "e2e-guild-1:default_topic"
 	require.Eventually(t, func() bool {
-			err := probeAgent.Publish(runCtx, "e2e-guild-1", sysTopic, listReq)
-			if err != nil {
-				return false
-			}
+		err := probeAgent.Publish(runCtx, "e2e-guild-1", sysTopic, listReq)
+		if err != nil {
+			return false
+		}
 
-			res, err := probeAgent.WaitForMessage(runCtx, replyTopic, 2*time.Second)
-			if err == nil && res.Format == "rustic_ai.core.agents.system.models.AgentListResponse" {
-				listRes = res
-				return true
+		res, err := probeAgent.WaitForMessage(runCtx, replyTopic, 2*time.Second)
+		if err == nil && res.Format == "rustic_ai.core.agents.system.models.AgentListResponse" {
+			listRes = res
+			return true
 		}
 		return false
 	}, 20*time.Second, 2*time.Second, "GuildManagerAgent should eventually respond to AgentListRequest")
@@ -187,15 +187,15 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 
 	var echoRes *probe.Message
 	require.Eventually(t, func() bool {
-			err := probeAgent.Publish(runCtx, "e2e-guild-1", echoTopic, echoReq)
-			if err != nil {
-				return false
-			}
+		err := probeAgent.Publish(runCtx, "e2e-guild-1", echoTopic, echoReq)
+		if err != nil {
+			return false
+		}
 
-			res, err := probeAgent.WaitForMessage(runCtx, echoOutTopic, 2*time.Second)
-			if err == nil && res != nil {
-				echoRes = res
-				return true
+		res, err := probeAgent.WaitForMessage(runCtx, echoOutTopic, 2*time.Second)
+		if err == nil && res != nil {
+			echoRes = res
+			return true
 		}
 		return false
 	}, 15*time.Second, 2*time.Second, "EchoAgent should eventually respond to our message")

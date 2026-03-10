@@ -8,8 +8,9 @@ import (
 	"strings"
 
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
+	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	_ "modernc.org/sqlite"
 )
 
 const (
@@ -33,7 +34,11 @@ func NewGormStore(driverName, dsn string) (Store, error) {
 		if err := ensureSQLiteDir(cleanDSN); err != nil {
 			return nil, fmt.Errorf("failed to prepare sqlite directory: %w", err)
 		}
-		dialector = sqlite.Open(cleanDSN)
+		// Use the pure-Go modernc driver so SQLite works when binaries are built with CGO disabled.
+		dialector = gormsqlite.New(gormsqlite.Config{
+			DriverName: "sqlite",
+			DSN:        cleanDSN,
+		})
 	case DriverPostgres:
 		dialector = postgres.Open(normalizePostgresDSN(dsn))
 	default:

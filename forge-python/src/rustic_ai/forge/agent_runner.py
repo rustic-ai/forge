@@ -63,7 +63,10 @@ def _enable_lenient_class_resolution() -> None:
         try:
             return _ORIGINAL_GET_CLASS_FROM_NAME(class_name)
         except Exception:
-            logger.warning("Using unresolved placeholder for class during validation: %s", class_name)
+            logger.warning(
+                "Using unresolved placeholder for class during validation: %s",
+                class_name,
+            )
             return _UnresolvedAgent
 
     guild_dsl.get_class_from_name = _lenient_get_class_from_name
@@ -124,7 +127,9 @@ def _load_guild_spec(guild_spec_json: str) -> GuildSpec:
         try:
             return GuildSpec.model_validate_json(guild_spec_json)
         except Exception:
-            logger.warning("Lenient GuildSpec re-validation failed; using structural fallback.")
+            logger.warning(
+                "Lenient GuildSpec re-validation failed; using structural fallback."
+            )
 
     raw = json.loads(guild_spec_json)
     if not isinstance(raw, dict):
@@ -144,11 +149,15 @@ def _load_guild_spec(guild_spec_json: str) -> GuildSpec:
                 class_name=str(raw_agent.get("class_name") or ""),
                 additional_topics=list(raw_agent.get("additional_topics") or []),
                 properties=raw_agent.get("properties", {}),
-                listen_to_default_topic=bool(raw_agent.get("listen_to_default_topic", True)),
+                listen_to_default_topic=bool(
+                    raw_agent.get("listen_to_default_topic", True)
+                ),
                 act_only_when_tagged=bool(raw_agent.get("act_only_when_tagged", False)),
                 predicates=raw_agent.get("predicates") or {},
                 dependency_map=raw_agent.get("dependency_map") or {},
-                additional_dependencies=list(raw_agent.get("additional_dependencies") or []),
+                additional_dependencies=list(
+                    raw_agent.get("additional_dependencies") or []
+                ),
                 resources=raw_agent.get("resources") or {},
                 qos=raw_agent.get("qos") or {},
             )

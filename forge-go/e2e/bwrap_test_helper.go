@@ -22,4 +22,3 @@ func bubblewrapUsable() bool {
 	)
 	return cmd.Run() == nil
 }
-

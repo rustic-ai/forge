@@ -5,14 +5,19 @@ from rustic_ai.core.guild.agent import AgentSpec
 from rustic_ai.core.guild.dsl import GuildSpec, QOSSpec, ResourceSpec
 from rustic_ai.core.guild.metastore.models import AgentStatus, GuildStatus
 from rustic_ai.core.messaging.core.message import RoutingRule
-from rustic_ai.forge.metastore.manager_client import ManagerAPIError, ManagerMetastoreClient
+from rustic_ai.forge.metastore.manager_client import (
+    ManagerAPIError,
+    ManagerMetastoreClient,
+)
 
 
 def test_manager_client_ensure_and_heartbeat_roundtrip():
     calls = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        calls.append((request.method, request.url.path, dict(request.headers), request.content))
+        calls.append(
+            (request.method, request.url.path, dict(request.headers), request.content)
+        )
 
         if request.url.path == "/manager/guilds/ensure":
             body = {
@@ -44,7 +49,9 @@ def test_manager_client_ensure_and_heartbeat_roundtrip():
 
         return httpx.Response(404, json={"error": "not found"})
 
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://forge.test")
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="http://forge.test"
+    )
     metastore = ManagerMetastoreClient("http://forge.test", token="tkn", client=client)
 
     spec = GuildSpec(id="g-1", name="Guild", description="desc")
@@ -69,9 +76,13 @@ def test_manager_client_request_payload_shapes():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured[request.url.path] = request.content.decode("utf-8")
-        return httpx.Response(200, json={"ok": True, "rule_hashid": "h", "deleted": True})
+        return httpx.Response(
+            200, json={"ok": True, "rule_hashid": "h", "deleted": True}
+        )
 
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://forge.test")
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="http://forge.test"
+    )
     metastore = ManagerMetastoreClient("http://forge.test", client=client)
 
     agent_spec = AgentSpec.model_construct(
@@ -102,7 +113,9 @@ def test_manager_client_raises_on_error_status():
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": "unauthorized"})
 
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://forge.test")
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="http://forge.test"
+    )
     metastore = ManagerMetastoreClient("http://forge.test", client=client)
 
     with pytest.raises(ManagerAPIError):
