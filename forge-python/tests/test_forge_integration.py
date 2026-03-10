@@ -158,27 +158,20 @@ entries:
             # Start forge daemon
             forge_bin = REPO_ROOT / "forge-go" / "forge"
 
-            # compile forge if not exists
-            if not forge_bin.exists():
-                subprocess.run(
-                    ["go", "build", "-o", str(forge_bin), "main.go"],
-                    cwd=str(REPO_ROOT / "forge-go"),
-                    check=True,
-                )
+            # Always compile forge to ensure the test uses the current tree.
+            subprocess.run(
+                ["go", "build", "-o", str(forge_bin), "main.go"],
+                cwd=str(REPO_ROOT / "forge-go"),
+                check=True,
+            )
 
             db_path = Path(tmpdir) / "forge.db"
-            spec_path = (
-                REPO_ROOT
-                / "forge-go"
-                / "testutil"
-                / "e2e"
-                / "testdata"
-                / "echo-guild.yaml"
-            )
+            listen_port = 19091
 
             env = os.environ.copy()
             env["REDIS_HOST"] = "localhost"
             env["REDIS_PORT"] = str(redis_server)
+            env["FORGE_AGENT_REGISTRY"] = str(reg_path)
             env["PYTHONPATH"] = (
                 f"{RUSTIC_AI_CORE / 'src'}:{RUSTIC_AI_CORE / 'tests'}:{FORGE_PYTHON_SRC}"
             )
@@ -187,14 +180,16 @@ entries:
             forge_proc = subprocess.Popen(
                 [
                     str(forge_bin),
-                    "run",
-                    str(spec_path),
-                    "--registry",
-                    str(reg_path),
-                    "--db-path",
-                    str(db_path),
+                    "server",
+                    "--db",
+                    f"sqlite://{db_path}",
                     "--redis",
                     f"localhost:{redis_server}",
+                    "--listen",
+                    f":{listen_port}",
+                    "--with-client",
+                    "--client-node-id",
+                    "integration-node-1",
                 ],
                 env=env,
                 stdout=forge_log,

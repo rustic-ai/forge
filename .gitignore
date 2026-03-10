@@ -88,6 +88,11 @@ cover/
 
 **/.gocache/
 **/.gomodcache/
+**/.golangci-cache/
+**/.gopath/
+**/.tmp/
+**/.tools/
+**/.bin/
 
 .claude/
 CLAUDE.md
