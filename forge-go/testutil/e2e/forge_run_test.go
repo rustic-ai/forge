@@ -25,10 +25,10 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
-	// End-to-end run includes binary build + uv sync + process bootstrap; keep timeout
-	// wide enough to avoid false failures under slower CI or constrained environments.
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+	// Bootstrap does real dependency work on cold CI runners, so keep setup separate
+	// from the shorter runtime/assertion window.
+	setupCtx, setupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer setupCancel()
 
 	// 1. Setup Test Environment (Miniredis & SQLite)
 	er, err := embed.StartEmbeddedRedis()
@@ -37,7 +37,7 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: er.Addr()})
 	defer rdb.Close()
 
-	err = rdb.Ping(ctx).Err()
+	err = rdb.Ping(setupCtx).Err()
 	require.NoError(t, err, "failed to ping embedded redis")
 
 	tempDir := t.TempDir()
@@ -49,16 +49,9 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 
 	// 4. Build the latest forge binary to execute
 	forgeBin := filepath.Join(tempDir, "forge")
-	cmdBuild := exec.CommandContext(ctx, "go", "build", "-o", forgeBin, "../../main.go")
+	cmdBuild := exec.CommandContext(setupCtx, "go", "build", "-o", forgeBin, "../../main.go")
 	out, err := cmdBuild.CombinedOutput()
 	require.NoError(t, err, "Failed to compile forge binary:\n%s", out)
-
-	// 5. Execute 'forge run' in the background
-	cmdRun := exec.CommandContext(ctx, forgeBin, "run", specPath,
-		"--redis", er.Addr(),
-		"--registry", regPath,
-		"--db-path", dbPath,
-	)
 
 	redisHost := "localhost"
 	redisPort := "6379"
@@ -73,11 +66,21 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 	absPythonPkg, _ := filepath.Abs("../../../forge-python")
 
 	// Ensure the forge-python package has a populated virtual environment
-	cmdSync := exec.CommandContext(ctx, "uv", "sync")
+	cmdSync := exec.CommandContext(setupCtx, "uv", "sync", "--frozen")
 	cmdSync.Dir = absPythonPkg
 	cmdSync.Stdout = os.Stdout
 	cmdSync.Stderr = os.Stderr
 	require.NoError(t, cmdSync.Run(), "Failed to run uv sync in forge-python")
+
+	runCtx, runCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer runCancel()
+
+	// 5. Execute 'forge run' in the background
+	cmdRun := exec.CommandContext(runCtx, forgeBin, "run", specPath,
+		"--redis", er.Addr(),
+		"--registry", regPath,
+		"--db-path", dbPath,
+	)
 
 	// Inject the local python package paths so the local Python binary can find both forge and core namespaces
 	cmdRun.Env = append(os.Environ(),
@@ -121,15 +124,15 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 	// Retrying because it takes a moment for UV to download and start python processes
 	replyTopic := "e2e-guild-1:default_topic"
 	require.Eventually(t, func() bool {
-		err := probeAgent.Publish(ctx, "e2e-guild-1", sysTopic, listReq)
-		if err != nil {
-			return false
-		}
+			err := probeAgent.Publish(runCtx, "e2e-guild-1", sysTopic, listReq)
+			if err != nil {
+				return false
+			}
 
-		res, err := probeAgent.WaitForMessage(ctx, replyTopic, 2*time.Second)
-		if err == nil && res.Format == "rustic_ai.core.agents.system.models.AgentListResponse" {
-			listRes = res
-			return true
+			res, err := probeAgent.WaitForMessage(runCtx, replyTopic, 2*time.Second)
+			if err == nil && res.Format == "rustic_ai.core.agents.system.models.AgentListResponse" {
+				listRes = res
+				return true
 		}
 		return false
 	}, 20*time.Second, 2*time.Second, "GuildManagerAgent should eventually respond to AgentListRequest")
@@ -176,15 +179,15 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 
 	var echoRes *probe.Message
 	require.Eventually(t, func() bool {
-		err := probeAgent.Publish(ctx, "e2e-guild-1", echoTopic, echoReq)
-		if err != nil {
-			return false
-		}
+			err := probeAgent.Publish(runCtx, "e2e-guild-1", echoTopic, echoReq)
+			if err != nil {
+				return false
+			}
 
-		res, err := probeAgent.WaitForMessage(ctx, echoOutTopic, 2*time.Second)
-		if err == nil && res != nil {
-			echoRes = res
-			return true
+			res, err := probeAgent.WaitForMessage(runCtx, echoOutTopic, 2*time.Second)
+			if err == nil && res != nil {
+				echoRes = res
+				return true
 		}
 		return false
 	}, 15*time.Second, 2*time.Second, "EchoAgent should eventually respond to our message")
