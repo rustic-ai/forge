@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/rustic-ai/forge/forge-go/embed"
+	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/testutil/probe"
 )
 
@@ -64,6 +65,13 @@ func TestE2E_ForgeRun_GuildManagerBootstrapsAgents(t *testing.T) {
 
 	// Create absolute paths for python environment
 	absPythonPkg, _ := filepath.Abs("../../../forge-python")
+
+	if _, err := exec.LookPath("uv"); err != nil {
+		require.NoError(t, registry.EnsureUV(), "Failed to ensure uv is available")
+	}
+
+	_, err = exec.LookPath("uv")
+	require.NoError(t, err, "uv must be available on PATH for forge-python bootstrap")
 
 	// Ensure the forge-python package has a populated virtual environment
 	cmdSync := exec.CommandContext(setupCtx, "uv", "sync", "--frozen")
