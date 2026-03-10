@@ -95,3 +95,83 @@ func TestChainSecretProvider(t *testing.T) {
 		t.Errorf("Expected ErrSecretNotFound, got %v", err)
 	}
 }
+
+func TestDotEnvSecretProvider(t *testing.T) {
+	tmpDir := t.TempDir()
+	dotenvPath := filepath.Join(tmpDir, ".env")
+	content := "# comment\nAPI_KEY=from_dotenv\nexport OTHER_KEY = other_value\nQUOTED=\"quoted value\"\n"
+	if err := os.WriteFile(dotenvPath, []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write dotenv file: %v", err)
+	}
+
+	p := NewDotEnvSecretProvider(dotenvPath)
+	ctx := context.Background()
+
+	val, err := p.Resolve(ctx, "API_KEY")
+	if err != nil {
+		t.Fatalf("Expected to resolve API_KEY from dotenv: %v", err)
+	}
+	if val != "from_dotenv" {
+		t.Errorf("Expected from_dotenv, got %s", val)
+	}
+
+	val, err = p.Resolve(ctx, "OTHER_KEY")
+	if err != nil {
+		t.Fatalf("Expected to resolve OTHER_KEY from dotenv: %v", err)
+	}
+	if val != "other_value" {
+		t.Errorf("Expected other_value, got %s", val)
+	}
+
+	val, err = p.Resolve(ctx, "QUOTED")
+	if err != nil {
+		t.Fatalf("Expected to resolve QUOTED from dotenv: %v", err)
+	}
+	if val != "quoted value" {
+		t.Errorf("Expected quoted value, got %s", val)
+	}
+
+	_, err = p.Resolve(ctx, "MISSING")
+	if err != ErrSecretNotFound {
+		t.Errorf("Expected ErrSecretNotFound, got %v", err)
+	}
+}
+
+func TestDefaultProvider_PreferenceOrder(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	secretsDir := filepath.Join(homeDir, ".forge", "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("Failed to create secrets dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(secretsDir, ".env"), []byte("SHARED_KEY=dotenv_value\n"), 0o600); err != nil {
+		t.Fatalf("Failed to write dotenv file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "SHARED_KEY"), []byte("file_value\n"), 0o600); err != nil {
+		t.Fatalf("Failed to write file secret: %v", err)
+	}
+
+	ctx := context.Background()
+	provider := DefaultProvider()
+
+	val, err := provider.Resolve(ctx, "SHARED_KEY")
+	if err != nil {
+		t.Fatalf("Expected to resolve SHARED_KEY from default provider: %v", err)
+	}
+	if val != "dotenv_value" {
+		t.Fatalf("Expected dotenv_value before file fallback, got %s", val)
+	}
+
+	os.Setenv("SHARED_KEY", "env_value")
+	defer os.Unsetenv("SHARED_KEY")
+
+	val, err = provider.Resolve(ctx, "SHARED_KEY")
+	if err != nil {
+		t.Fatalf("Expected to resolve SHARED_KEY from env: %v", err)
+	}
+	if val != "env_value" {
+		t.Fatalf("Expected env_value to override dotenv and file, got %s", val)
+	}
+}

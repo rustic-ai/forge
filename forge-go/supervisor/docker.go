@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -198,8 +199,11 @@ func (d *DockerSupervisor) Launch(ctx context.Context, guildID string, agentSpec
 		cmd = registry.ResolveCommand(entry)
 	}
 
-	if len(cmd) > 0 && cmd[0] == "uvx" {
-		cmd = append([]string{"uv", "tool", "run"}, cmd[1:]...)
+	if len(cmd) > 0 {
+		base := filepath.Base(cmd[0])
+		if base == "uvx" || base == "uvx.exe" {
+			cmd = append([]string{"uv", "tool", "run"}, cmd[1:]...)
+		}
 	}
 
 	containerCfg, hostCfg := BuildContainerConfig(agentSpec, entry, guildID, imageRef, cmd, env)
@@ -341,8 +345,11 @@ func (d *DockerSupervisor) relaunchContainer(ctx context.Context, guildID string
 		cmd = registry.ResolveCommand(entry)
 	}
 
-	if len(cmd) > 0 && cmd[0] == "uvx" {
-		cmd = append([]string{"uv", "tool", "run"}, cmd[1:]...)
+	if len(cmd) > 0 {
+		base := filepath.Base(cmd[0])
+		if base == "uvx" || base == "uvx.exe" {
+			cmd = append([]string{"uv", "tool", "run"}, cmd[1:]...)
+		}
 	}
 
 	containerCfg, hostCfg := BuildContainerConfig(agentSpec, entry, guildID, imageRef, cmd, env)

@@ -1,15 +1,19 @@
 package store
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gorm.io/driver/postgres"
 	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 	_ "modernc.org/sqlite"
 )
 
@@ -45,9 +49,16 @@ func NewGormStore(driverName, dsn string) (Store, error) {
 		return nil, fmt.Errorf("unsupported database driver: %s", driverName)
 	}
 
-	db, err := gorm.Open(dialector, &gorm.Config{})
+	db, err := gorm.Open(dialector, &gorm.Config{
+		Logger: newGormLogger(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	if strings.ToLower(driverName) == DriverSQLite {
+		if err := configureSQLite(db, normalizeSQLiteDSN(dsn)); err != nil {
+			return nil, fmt.Errorf("failed to configure sqlite connection: %w", err)
+		}
 	}
 
 	// AutoMigrate the schema
@@ -66,6 +77,52 @@ func NewGormStore(driverName, dsn string) (Store, error) {
 	}
 
 	return &gormStore{db: db}, nil
+}
+
+func newGormLogger() gormlogger.Interface {
+	return gormlogger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		gormlogger.Config{
+			SlowThreshold:             time.Second,
+			LogLevel:                  gormlogger.Warn,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)
+}
+
+func configureSQLite(db *gorm.DB, dsn string) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	// SQLite is used as an embedded local metastore in the desktop flow. Keeping
+	// a single shared connection avoids parallel writers fighting each other.
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetConnMaxLifetime(0)
+
+	if err := applySQLitePragmas(sqlDB, dsn); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func applySQLitePragmas(db *sql.DB, dsn string) error {
+	if _, err := db.Exec(`PRAGMA busy_timeout = 5000;`); err != nil {
+		return err
+	}
+	if isSQLiteFileDSN(dsn) {
+		if _, err := db.Exec(`PRAGMA journal_mode = WAL;`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`PRAGMA synchronous = NORMAL;`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runSchemaParityMigrations(db *gorm.DB) error {
@@ -200,6 +257,17 @@ func ensureSQLiteDir(dsn string) error {
 		return nil
 	}
 	return os.MkdirAll(parent, 0o755)
+}
+
+func isSQLiteFileDSN(dsn string) bool {
+	switch {
+	case dsn == "", dsn == ":memory:", strings.HasPrefix(dsn, "file::memory:"):
+		return false
+	case strings.HasPrefix(dsn, "file:"):
+		return !strings.Contains(dsn, "mode=memory")
+	default:
+		return true
+	}
 }
 
 func (s *gormStore) CreateGuild(guild *GuildModel) error {

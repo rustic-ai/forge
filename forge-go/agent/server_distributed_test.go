@@ -254,6 +254,8 @@ entries:
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not shut down after cancel")
 	}
+
+	assert.False(t, scheduler.GlobalNodeRegistry.IsHealthy("embedded-node-1"), "embedded client node should deregister during shutdown")
 }
 
 func TestStartServer_FailsWhenEmbeddedRedisAddressOccupied(t *testing.T) {

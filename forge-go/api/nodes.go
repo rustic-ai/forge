@@ -45,6 +45,18 @@ func NodeHeartbeatHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func NodeDeregisterHandler(w http.ResponseWriter, r *http.Request) {
+	nodeID := r.PathValue("node_id")
+	if nodeID == "" {
+		ReplyError(w, http.StatusBadRequest, "node_id is required")
+		return
+	}
+
+	scheduler.GlobalNodeRegistry.Deregister(nodeID)
+	slog.Default().Info("Node deregistered", "node_id", nodeID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func ListNodesHandler(w http.ResponseWriter, r *http.Request) {
 	nodes := scheduler.GlobalNodeRegistry.ListHealthy()
 

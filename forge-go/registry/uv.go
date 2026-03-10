@@ -15,14 +15,91 @@ import (
 	"strings"
 )
 
+var (
+	execLookPath          = exec.LookPath
+	currentExecutablePath = os.Executable
+)
+
+func uvxExecutableName() string {
+	if runtime.GOOS == "windows" {
+		return "uvx.exe"
+	}
+	return "uvx"
+}
+
+func bundledUVXPath() string {
+	executablePath, err := currentExecutablePath()
+	if err != nil || executablePath == "" {
+		return ""
+	}
+	uvxPath := filepath.Join(filepath.Dir(executablePath), uvxExecutableName())
+	if info, err := os.Stat(uvxPath); err == nil && !info.IsDir() {
+		return uvxPath
+	}
+	return ""
+}
+
+func forgeBinUVXPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil || homeDir == "" {
+		return ""
+	}
+	uvxPath := filepath.Join(homeDir, ".forge", "bin", uvxExecutableName())
+	if info, err := os.Stat(uvxPath); err == nil && !info.IsDir() {
+		return uvxPath
+	}
+	return ""
+}
+
+func configuredUVXPath() string {
+	uvxPath := strings.TrimSpace(os.Getenv("FORGE_UVX_PATH"))
+	if uvxPath == "" {
+		return ""
+	}
+	if info, err := os.Stat(uvxPath); err == nil && !info.IsDir() {
+		return uvxPath
+	}
+	return ""
+}
+
+// ResolveUVXCommand returns the uvx executable Forge should invoke.
+// Preference order:
+// 1. bundled uvx next to the running Forge binary
+// 2. uvx already available on PATH
+// 3. ~/.forge/bin/uvx
+// 4. FORGE_UVX_PATH
+func ResolveUVXCommand() string {
+	if uvxPath := bundledUVXPath(); uvxPath != "" {
+		return uvxPath
+	}
+	if _, err := execLookPath("uvx"); err == nil {
+		return "uvx"
+	}
+	if uvxPath := forgeBinUVXPath(); uvxPath != "" {
+		return uvxPath
+	}
+	if uvxPath := configuredUVXPath(); uvxPath != "" {
+		return uvxPath
+	}
+	return "uvx"
+}
+
 // EnsureUV checks if `uvx` is on the PATH. If not, it attempts to download and
 // install `uv` (which includes `uvx`) to ~/.forge/bin and prepends it to the PATH
 // for the current process.
 func EnsureUV() error {
-	_, err := exec.LookPath("uvx")
-	if err == nil {
+	if uvxPath := bundledUVXPath(); uvxPath != "" {
+		return addToPath(filepath.Dir(uvxPath))
+	}
+	if _, err := execLookPath("uvx"); err == nil {
 		// uvx is already available
 		return nil
+	}
+	if uvxPath := forgeBinUVXPath(); uvxPath != "" {
+		return addToPath(filepath.Dir(uvxPath))
+	}
+	if uvxPath := configuredUVXPath(); uvxPath != "" {
+		return addToPath(filepath.Dir(uvxPath))
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -31,15 +108,6 @@ func EnsureUV() error {
 	}
 
 	forgeBin := filepath.Join(homeDir, ".forge", "bin")
-
-	uvxExecutable := "uvx"
-	if runtime.GOOS == "windows" {
-		uvxExecutable = "uvx.exe"
-	}
-	uvxPath := filepath.Join(forgeBin, uvxExecutable)
-	if _, err := os.Stat(uvxPath); err == nil {
-		return addToPath(forgeBin)
-	}
 
 	if err := os.MkdirAll(forgeBin, 0755); err != nil {
 		return fmt.Errorf("failed to create %s: %w", forgeBin, err)

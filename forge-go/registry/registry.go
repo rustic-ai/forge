@@ -130,7 +130,7 @@ func ResolveCommand(entry *AgentRegistryEntry) []string {
 
 	switch entry.Runtime {
 	case RuntimeUVX:
-		cmd = append(cmd, "uvx")
+		cmd = append(cmd, ResolveUVXCommand())
 		forgePkg := os.Getenv("FORGE_PYTHON_PKG")
 		if forgePkg == "" {
 			forgePkg = "rusticai-forge"
@@ -159,7 +159,7 @@ func ResolveCommand(entry *AgentRegistryEntry) []string {
 		}
 
 	default:
-		cmd = append(cmd, "uvx", "python", "-m", "rustic_ai.forge.agent_runner")
+		cmd = append(cmd, ResolveUVXCommand(), "python", "-m", "rustic_ai.forge.agent_runner")
 	}
 
 	return cmd

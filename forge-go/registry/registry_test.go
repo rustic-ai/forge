@@ -2,6 +2,7 @@ package registry
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -42,7 +43,7 @@ func TestParseRegistry(t *testing.T) {
 
 	// 2. Resolve uvx command
 	cmd1 := ResolveCommand(entry1)
-	if len(cmd1) != 8 || cmd1[0] != "uvx" || cmd1[1] != "--with" || cmd1[2] != "rusticai-forge" || cmd1[3] != "--with" || cmd1[4] != "rusticai-core" || cmd1[5] != "python" {
+	if len(cmd1) != 8 || filepath.Base(cmd1[0]) != uvxExecutableName() || cmd1[1] != "--with" || cmd1[2] != "rusticai-forge" || cmd1[3] != "--with" || cmd1[4] != "rusticai-core" || cmd1[5] != "python" {
 		t.Errorf("Unexpected uvx command resolution: %v", cmd1)
 	}
 
@@ -65,6 +66,63 @@ func TestParseRegistry(t *testing.T) {
 	_, err = reg.Lookup("nonexistent.Agent")
 	if err == nil {
 		t.Fatal("Expected error looking up unknown class, got nil")
+	}
+}
+
+func TestResolveUVXCommand_PrefersBundledBinary(t *testing.T) {
+	origExecLookPath := execLookPath
+	origCurrentExecutablePath := currentExecutablePath
+	defer func() {
+		execLookPath = origExecLookPath
+		currentExecutablePath = origCurrentExecutablePath
+	}()
+
+	tmpDir := t.TempDir()
+	bundledForge := filepath.Join(tmpDir, "forge")
+	bundledUVX := filepath.Join(tmpDir, uvxExecutableName())
+	if err := os.WriteFile(bundledUVX, []byte(""), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	execLookPath = func(file string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+	currentExecutablePath = func() (string, error) {
+		return bundledForge, nil
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("FORGE_UVX_PATH", filepath.Join(t.TempDir(), "missing-uvx"))
+
+	if got := ResolveUVXCommand(); got != bundledUVX {
+		t.Fatalf("expected bundled uvx path %q, got %q", bundledUVX, got)
+	}
+}
+
+func TestResolveUVXCommand_UsesConfiguredFallback(t *testing.T) {
+	origExecLookPath := execLookPath
+	origCurrentExecutablePath := currentExecutablePath
+	defer func() {
+		execLookPath = origExecLookPath
+		currentExecutablePath = origCurrentExecutablePath
+	}()
+
+	tmpDir := t.TempDir()
+	configuredUVX := filepath.Join(tmpDir, "custom-uvx")
+	if err := os.WriteFile(configuredUVX, []byte(""), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	execLookPath = func(file string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+	currentExecutablePath = func() (string, error) {
+		return filepath.Join(tmpDir, "forge"), nil
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("FORGE_UVX_PATH", configuredUVX)
+
+	if got := ResolveUVXCommand(); got != configuredUVX {
+		t.Fatalf("expected configured uvx path %q, got %q", configuredUVX, got)
 	}
 }
 

@@ -35,6 +35,9 @@ func TestStartClient_ConsumesNodeQueueAndLaunches(t *testing.T) {
 	mux.HandleFunc("POST /nodes/{node_id}/heartbeat", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("DELETE /nodes/{node_id}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -154,6 +157,9 @@ func TestStartClient_ReRegistersWhenHeartbeatNodeMissing(t *testing.T) {
 		missingNode.Store(true)
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("DELETE /nodes/{node_id}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -197,4 +203,65 @@ entries:
 	case <-time.After(3 * time.Second):
 		t.Fatal("client did not stop after cancel")
 	}
+}
+
+func TestStartClient_DeregistersNodeOnShutdown(t *testing.T) {
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	defer mr.Close()
+
+	var deregisterCount atomic.Int32
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /nodes/register", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+	mux.HandleFunc("POST /nodes/{node_id}/heartbeat", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("DELETE /nodes/{node_id}", func(w http.ResponseWriter, r *http.Request) {
+		deregisterCount.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	regYaml := `
+entries:
+  - id: TestAgent
+    class_name: "test.Agent"
+    runtime: binary
+    executable: "/bin/echo"
+`
+	regPath := filepath.Join(t.TempDir(), "reg.yaml")
+	require.NoError(t, os.WriteFile(regPath, []byte(regYaml), 0644))
+	t.Setenv("FORGE_AGENT_REGISTRY", regPath)
+
+	cfg := &ClientConfig{
+		ServerURL:   ts.URL,
+		RedisURL:    mr.Addr(),
+		NodeID:      "client-node-deregister",
+		CPUs:        2,
+		Memory:      1024,
+		GPUs:        0,
+		MetricsAddr: "127.0.0.1:0",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- StartClient(ctx, cfg)
+	}()
+
+	time.Sleep(300 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("client did not stop after cancel")
+	}
+
+	assert.Equal(t, int32(1), deregisterCount.Load())
 }

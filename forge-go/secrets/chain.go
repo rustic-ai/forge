@@ -25,6 +25,7 @@ func (p *ChainSecretProvider) Resolve(ctx context.Context, key string) (string, 
 func DefaultProvider() SecretProvider {
 	return NewChainSecretProvider(
 		NewEnvSecretProvider(),
+		NewDotEnvSecretProvider(""),
 		NewFileSecretProvider(""),
 	)
 }

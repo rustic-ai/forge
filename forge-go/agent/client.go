@@ -43,6 +43,22 @@ func registerNode(ctx context.Context, serverURL string, payload []byte) error {
 	return nil
 }
 
+func deregisterNode(ctx context.Context, serverURL, nodeID string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/nodes/%s", serverURL, nodeID), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("server returned unexpected status during deregistration: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func StartClient(ctx context.Context, config *ClientConfig) error {
 	log := logging.FromContext(ctx, slog.Default()).With("node_id", config.NodeID)
 
@@ -115,10 +131,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 			_ = reg.InjectNetwork(className, nets)
 		}
 	}
-	sec := secrets.NewChainSecretProvider(
-		secrets.NewEnvSecretProvider(),
-		secrets.NewFileSecretProvider(""),
-	)
+	sec := secrets.DefaultProvider()
 	supervisorFactory := buildOrgSupervisorFactory(rdb, config.DefaultSupervisor)
 	nodeQueueKey := "forge:control:node:" + config.NodeID
 	queueHandler := control.NewControlQueueHandlerWithQueueFactory(rdb, reg, sec, supervisorFactory, nil, nodeQueueKey)
@@ -217,6 +230,9 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := deregisterNode(shutdownCtx, config.ServerURL, config.NodeID); err != nil {
+		log.Warn("Failed to deregister node during shutdown", "error", err)
+	}
 	_ = metricsServer.Shutdown(shutdownCtx)
 
 	return nil

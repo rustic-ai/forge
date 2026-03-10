@@ -28,6 +28,9 @@ import (
 const defaultEmbeddedRedisAddr = "127.0.0.1:6379"
 
 func StartServer(ctx context.Context, cfg *ServerConfig) error {
+	serverCtx, cancelServer := context.WithCancel(ctx)
+	defer cancelServer()
+
 	l := slog.Default()
 	defer l.Info("Forge server completely shut down")
 	l.Info("Starting Forge distributed server", "listen", cfg.ListenAddress)
@@ -135,7 +138,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		queueListener.Start(ctx)
+		queueListener.Start(serverCtx)
 		slog.Default().Info("Control queue listener shut down")
 	}()
 
@@ -163,7 +166,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := elector.Acquire(ctx); err != nil && err != context.Canceled {
+		if err := elector.Acquire(serverCtx); err != nil && err != context.Canceled {
 			slog.Default().Error("LeaderElector failed", "error", err)
 		}
 	}()
@@ -172,7 +175,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		reconciler.Start(ctx)
+		reconciler.Start(serverCtx)
 		slog.Default().Info("Node reconciler shut down")
 	}()
 
@@ -199,12 +202,16 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := httpServer.Start(ctx); err != nil {
+		if err := httpServer.Start(serverCtx); err != nil {
 			l.Error("HTTP API exited with error", "error", err)
 		}
 		l.Info("HTTP API Placeholder listening on", "address", cfg.ListenAddress)
 	}()
 
+	var (
+		cancelClient         context.CancelFunc
+		embeddedClientNodeID string
+	)
 	if cfg.WithClient {
 		clientServerURL := deriveManagerAPIBaseURL(cfg.ListenAddress, "")
 		clientMetricsAddr := strings.TrimSpace(cfg.ClientMetricsAddr)
@@ -226,24 +233,34 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 			"node_id", clientCfg.NodeID,
 			"metrics_addr", clientCfg.MetricsAddr,
 		)
+		clientCtx, clientCancel := context.WithCancel(serverCtx)
+		cancelClient = clientCancel
+		embeddedClientNodeID = clientCfg.NodeID
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := waitForServerReady(ctx, clientServerURL, 5*time.Second); err != nil {
+			if err := waitForServerReady(clientCtx, clientServerURL, 5*time.Second); err != nil {
 				if err != context.Canceled {
 					l.Error("Failed waiting for server readiness before starting in-process client", "error", err)
 				}
 				return
 			}
-			if err := StartClient(ctx, clientCfg); err != nil && err != context.Canceled {
+			if err := StartClient(clientCtx, clientCfg); err != nil && err != context.Canceled {
 				l.Error("In-process client exited with error", "error", err)
 			}
 		}()
 	}
 
-	<-ctx.Done()
+	<-serverCtx.Done()
 
 	l.Info("Received cancellation signal. Commencing graceful shutdown...")
+	if cancelClient != nil {
+		if embeddedClientNodeID != "" {
+			scheduler.GlobalNodeRegistry.Deregister(embeddedClientNodeID)
+			l.Info("Embedded client node deregistered during server shutdown", "node_id", embeddedClientNodeID)
+		}
+		cancelClient()
+	}
 
 	wg.Wait()
 
