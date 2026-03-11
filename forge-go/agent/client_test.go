@@ -56,6 +56,7 @@ entries:
 	cfg := &ClientConfig{
 		ServerURL:   ts.URL,
 		RedisURL:    mr.Addr(),
+		DataDir:     t.TempDir(),
 		NodeID:      nodeID,
 		CPUs:        2,
 		Memory:      1024,
@@ -177,6 +178,7 @@ entries:
 	cfg := &ClientConfig{
 		ServerURL:   ts.URL,
 		RedisURL:    mr.Addr(),
+		DataDir:     t.TempDir(),
 		NodeID:      "client-node-reregister",
 		CPUs:        2,
 		Memory:      1024,
@@ -240,6 +242,7 @@ entries:
 	cfg := &ClientConfig{
 		ServerURL:   ts.URL,
 		RedisURL:    mr.Addr(),
+		DataDir:     t.TempDir(),
 		NodeID:      "client-node-deregister",
 		CPUs:        2,
 		Memory:      1024,

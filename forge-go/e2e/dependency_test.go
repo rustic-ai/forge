@@ -120,7 +120,7 @@ func TestLevel2_FileDependencyIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to load registry yaml")
 
 	// 6. Launch via Local Process Supervisor
-	sup := supervisor.NewProcessSupervisor(rdb)
+	sup := supervisor.NewProcessSupervisor(rdb, supervisor.WithWorkDirBase(t.TempDir()))
 	defer func() {
 		if err := sup.StopAll(context.Background()); err != nil {
 			t.Logf("failed to stop all agents: %v", err)

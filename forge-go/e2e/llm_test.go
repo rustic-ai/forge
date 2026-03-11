@@ -125,7 +125,7 @@ func TestLevel3_LLMAgentIntegration(t *testing.T) {
 	env := append(envVars, "PYTHONUNBUFFERED=1", "LOG_LEVEL=DEBUG")
 
 	// 6. Launch via Local Process Supervisor
-	sup := supervisor.NewProcessSupervisor(rdb)
+	sup := supervisor.NewProcessSupervisor(rdb, supervisor.WithWorkDirBase(t.TempDir()))
 	defer func() {
 		if err := sup.StopAll(context.Background()); err != nil {
 			t.Logf("failed to stop all agents: %v", err)

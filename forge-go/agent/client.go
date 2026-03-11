@@ -132,7 +132,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		}
 	}
 	sec := secrets.DefaultProvider()
-	supervisorFactory := buildOrgSupervisorFactory(rdb, config.DefaultSupervisor)
+	supervisorFactory := buildOrgSupervisorFactory(rdb, config.DefaultSupervisor, config.DataDir)
 	nodeQueueKey := "forge:control:node:" + config.NodeID
 	queueHandler := control.NewControlQueueHandlerWithQueueFactory(rdb, reg, sec, supervisorFactory, nil, nodeQueueKey)
 	if err := queueHandler.Start(ctx); err != nil {

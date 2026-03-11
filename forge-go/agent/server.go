@@ -221,6 +221,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 		clientCfg := &ClientConfig{
 			ServerURL:         clientServerURL,
 			RedisURL:          redisAddr,
+			DataDir:           cfg.DataDir,
 			CPUs:              cfg.ClientCPUs,
 			Memory:            cfg.ClientMemory,
 			GPUs:              cfg.ClientGPUs,

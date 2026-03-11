@@ -2,7 +2,10 @@ package supervisor
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,8 +27,23 @@ func getEchoCmd() []string {
 	return []string{"echo", "hello"}
 }
 
+func getWorkDirProbeCmd() []string {
+	if runtime.GOOS == "windows" {
+		return []string{
+			"cmd",
+			"/C",
+			`cd > cwd.txt & (echo %FORGE_AGENT_WORKDIR%& echo %HOME%& echo %TMP%& echo %XDG_CACHE_HOME%& echo %XDG_DATA_HOME%& echo %USERPROFILE%) > env.txt & ping -n 10 127.0.0.1 >NUL`,
+		}
+	}
+	return []string{
+		"sh",
+		"-c",
+		`pwd > cwd.txt; printf "%s\n%s\n%s\n%s\n%s\n%s\n" "$FORGE_AGENT_WORKDIR" "$HOME" "$TMPDIR" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$USERPROFILE" > env.txt; sleep 10`,
+	}
+}
+
 func TestProcessSupervisorLaunchAndStop(t *testing.T) {
-	sup := NewProcessSupervisor(nil)
+	sup := NewProcessSupervisor(nil, WithWorkDirBase(t.TempDir()))
 	ctx := context.Background()
 	guildID := "test-guild"
 
@@ -64,7 +82,7 @@ func TestProcessSupervisorLaunchAndStop(t *testing.T) {
 }
 
 func TestProcessSupervisorCrashRestart(t *testing.T) {
-	sup := NewProcessSupervisor(nil)
+	sup := NewProcessSupervisor(nil, WithWorkDirBase(t.TempDir()))
 	ctx := context.Background()
 	guildID := "test-guild"
 
@@ -97,7 +115,7 @@ func TestProcessSupervisorCrashRestart(t *testing.T) {
 }
 
 func TestProcessSupervisorGuildScopedAgentKeys(t *testing.T) {
-	sup := NewProcessSupervisor(nil)
+	sup := NewProcessSupervisor(nil, WithWorkDirBase(t.TempDir()))
 	ctx := context.Background()
 
 	agentID := "upa-dummyuserid"
@@ -129,4 +147,46 @@ func TestProcessSupervisorGuildScopedAgentKeys(t *testing.T) {
 	if statusB != string(StateStopped) {
 		t.Fatalf("expected guild B status stopped, got %s", statusB)
 	}
+}
+
+func TestProcessSupervisorLaunchesIntoPerAgentWorkDir(t *testing.T) {
+	baseDir := t.TempDir()
+	sup := NewProcessSupervisor(
+		nil,
+		WithWorkDirBase(baseDir),
+		WithOrganizationID("org-1"),
+	)
+	ctx := context.Background()
+	guildID := "guild-1"
+
+	agent := NewManagedAgent(guildID, "agent-1")
+	sup.mu.Lock()
+	sup.agents[scopedAgentKey(guildID, "agent-1")] = agent
+	sup.mu.Unlock()
+
+	require.NoError(t, sup.startProcess(ctx, guildID, agent, &protocol.AgentSpec{}, getWorkDirProbeCmd(), nil))
+	defer func() {
+		_ = sup.Stop(ctx, guildID, "agent-1")
+	}()
+
+	workDir := sup.resolveAgentWorkDir(guildID, "agent-1")
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(filepath.Join(workDir, "cwd.txt"))
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	cwdBytes, err := os.ReadFile(filepath.Join(workDir, "cwd.txt"))
+	require.NoError(t, err)
+	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(string(cwdBytes))))
+
+	envBytes, err := os.ReadFile(filepath.Join(workDir, "env.txt"))
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSpace(string(envBytes)), "\n")
+	require.GreaterOrEqual(t, len(lines), 6)
+	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(lines[0])))
+	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(lines[1])))
+	require.Equal(t, filepath.Clean(filepath.Join(workDir, "tmp")), filepath.Clean(strings.TrimSpace(lines[2])))
+	require.Equal(t, filepath.Clean(filepath.Join(workDir, ".cache")), filepath.Clean(strings.TrimSpace(lines[3])))
+	require.Equal(t, filepath.Clean(filepath.Join(workDir, ".local", "share")), filepath.Clean(strings.TrimSpace(lines[4])))
+	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(lines[5])))
 }

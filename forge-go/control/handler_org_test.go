@@ -397,7 +397,7 @@ entries:
 			_ = orgID
 			return supervisor.NewDispatchingSupervisor(
 				"process",
-				supervisor.NewProcessSupervisor(rdb),
+				supervisor.NewProcessSupervisor(rdb, supervisor.WithWorkDirBase(t.TempDir())),
 				nil,
 				nil,
 			)

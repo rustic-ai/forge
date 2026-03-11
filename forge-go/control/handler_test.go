@@ -42,7 +42,7 @@ func TestHandler_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	sec := secrets.NewEnvSecretProvider()
-	sup := supervisor.NewProcessSupervisor(rdb)
+	sup := supervisor.NewProcessSupervisor(rdb, supervisor.WithWorkDirBase(t.TempDir()))
 
 	dbStore, err := store.NewGormStore(store.DriverSQLite, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestHandler_SpawnWithoutGuildStore_UsesFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	sec := secrets.NewEnvSecretProvider()
-	sup := supervisor.NewProcessSupervisor(rdb)
+	sup := supervisor.NewProcessSupervisor(rdb, supervisor.WithWorkDirBase(t.TempDir()))
 
 	handler := NewControlQueueHandler(rdb, reg, sec, sup, nil)
 	err = handler.Start(ctx)

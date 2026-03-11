@@ -7,30 +7,62 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/shirou/gopsutil/v3/process"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"github.com/rustic-ai/forge/forge-go/filesystem"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/telemetry"
 )
 
 type ProcessSupervisor struct {
-	mu     sync.RWMutex
-	agents map[string]*ManagedAgent
-	rdb    *redis.Client
+	mu          sync.RWMutex
+	agents      map[string]*ManagedAgent
+	rdb         *redis.Client
+	workDirBase string
+	orgID       string
 }
 
-func NewProcessSupervisor(rdb *redis.Client) *ProcessSupervisor {
-	return &ProcessSupervisor{
-		agents: make(map[string]*ManagedAgent),
-		rdb:    rdb,
+type ProcessSupervisorOption func(*ProcessSupervisor)
+
+func WithWorkDirBase(dataDir string) ProcessSupervisorOption {
+	return func(p *ProcessSupervisor) {
+		p.workDirBase = resolveProcessWorkDirBase(dataDir)
 	}
+}
+
+func WithOrganizationID(orgID string) ProcessSupervisorOption {
+	return func(p *ProcessSupervisor) {
+		if strings.TrimSpace(orgID) != "" {
+			p.orgID = orgID
+		}
+	}
+}
+
+func NewProcessSupervisor(rdb *redis.Client, opts ...ProcessSupervisorOption) *ProcessSupervisor {
+	p := &ProcessSupervisor{
+		agents:      make(map[string]*ManagedAgent),
+		rdb:         rdb,
+		workDirBase: resolveProcessWorkDirBase(""),
+		orgID:       "default-org",
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(p)
+		}
+	}
+
+	return p
 }
 
 func (p *ProcessSupervisor) Launch(ctx context.Context, guildID string, agentSpec *protocol.AgentSpec, reg *registry.Registry, env []string) error {
@@ -70,6 +102,15 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 	}
 
 	cmd := exec.CommandContext(ctx, runtimeCmd[0], runtimeCmd[1:]...)
+
+	workDir, err := p.ensureAgentWorkDir(guildID, agent.ID)
+	if err != nil {
+		agent.SetState(StateFailed)
+		agent.LastError = err
+		return fmt.Errorf("failed to prepare working directory for agent %s: %w", agent.ID, err)
+	}
+
+	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), env...)
 
 	propagator := otel.GetTextMapPropagator()
@@ -78,6 +119,8 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 	if tp, ok := carrier["traceparent"]; ok {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("TRACEPARENT=%s", tp))
 	}
+
+	cmd.Env = append(cmd.Env, processWorkDirEnv(workDir)...)
 
 	stdoutPipe, _ := cmd.StdoutPipe()
 	stderrPipe, _ := cmd.StderrPipe()
@@ -120,6 +163,93 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 	go p.monitorProcess(guildID, agent, agentSpec, cmd, runtimeCmd, env)
 
 	return nil
+}
+
+func (p *ProcessSupervisor) ensureAgentWorkDir(guildID, agentID string) (string, error) {
+	workDir := p.resolveAgentWorkDir(guildID, agentID)
+	tmpDir := filepath.Join(workDir, "tmp")
+	cacheDir := filepath.Join(workDir, ".cache")
+	dataDir := filepath.Join(workDir, ".local", "share")
+
+	for _, dir := range []string{workDir, tmpDir, cacheDir, dataDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return "", err
+		}
+	}
+
+	return workDir, nil
+}
+
+func (p *ProcessSupervisor) resolveAgentWorkDir(guildID, agentID string) string {
+	resolver := filesystem.NewFileSystemResolver(p.workDirBase)
+	return resolver.ResolvePath(
+		sanitizePathComponent(p.orgID),
+		sanitizePathComponent(guildID),
+		sanitizePathComponent(agentID),
+	)
+}
+
+func processWorkDirEnv(workDir string) []string {
+	tmpDir := filepath.Join(workDir, "tmp")
+	cacheDir := filepath.Join(workDir, ".cache")
+	dataDir := filepath.Join(workDir, ".local", "share")
+
+	return []string{
+		"FORGE_AGENT_WORKDIR=" + workDir,
+		"HOME=" + workDir,
+		"USERPROFILE=" + workDir,
+		"TMPDIR=" + tmpDir,
+		"TMP=" + tmpDir,
+		"TEMP=" + tmpDir,
+		"XDG_CACHE_HOME=" + cacheDir,
+		"XDG_DATA_HOME=" + dataDir,
+	}
+}
+
+func resolveProcessWorkDirBase(dataDir string) string {
+	root := strings.TrimSpace(dataDir)
+	homeDir, _ := os.UserHomeDir()
+
+	switch {
+	case root == "":
+		if homeDir != "" {
+			root = filepath.Join(homeDir, ".forge", "data")
+		} else {
+			root = filepath.Join(os.TempDir(), "forge-data")
+		}
+	case root == "~":
+		root = homeDir
+	case strings.HasPrefix(root, "~/"):
+		root = filepath.Join(homeDir, root[2:])
+	}
+
+	return filepath.Join(filepath.Clean(root), "agents")
+}
+
+func sanitizePathComponent(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r):
+			b.WriteRune(r)
+		case strings.ContainsRune("._-#@=", r):
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+
+	sanitized := strings.Trim(b.String(), " ._")
+	if sanitized == "" || sanitized == "." || sanitized == ".." {
+		return "unknown"
+	}
+
+	return sanitized
 }
 
 func (p *ProcessSupervisor) monitorProcess(guildID string, agent *ManagedAgent, agentSpec *protocol.AgentSpec, cmd *exec.Cmd, runtimeCmd []string, env []string) {

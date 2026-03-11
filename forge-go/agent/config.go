@@ -24,6 +24,7 @@ type ServerConfig struct {
 type ClientConfig struct {
 	ServerURL         string
 	RedisURL          string
+	DataDir           string
 	CPUs              int
 	Memory            int
 	GPUs              int

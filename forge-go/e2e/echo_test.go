@@ -135,7 +135,7 @@ func TestLevel1_EchoAgentIntegration(t *testing.T) {
 			var sup supervisor.AgentSupervisor
 			switch reqSup {
 			case "process":
-				sup = supervisor.NewProcessSupervisor(rdb)
+				sup = supervisor.NewProcessSupervisor(rdb, supervisor.WithWorkDirBase(t.TempDir()))
 			case "docker":
 				ds, err := supervisor.NewDockerSupervisor(rdb)
 				if err != nil || !ds.Available() {
