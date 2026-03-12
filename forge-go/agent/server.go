@@ -231,6 +231,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 			NodeID:            cfg.ClientNodeID,
 			MetricsAddr:       clientMetricsAddr,
 			DefaultSupervisor: cfg.ClientDefaultSupervisor,
+			AttachProcessTree: cfg.ClientAttachProcessTree,
 		}
 		l.Info("In-process Forge client enabled",
 			"server_url", clientServerURL,

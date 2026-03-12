@@ -5,11 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rustic-ai/forge/forge-go/protocol"
+	gopsprocess "github.com/shirou/gopsutil/v3/process"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,6 +42,13 @@ func getWorkDirProbeCmd() []string {
 		"-c",
 		`pwd > cwd.txt; printf "%s\n%s\n%s\n%s\n%s\n%s\n" "$FORGE_AGENT_WORKDIR" "$HOME" "$TMPDIR" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$USERPROFILE" > env.txt; sleep 10`,
 	}
+}
+
+func getChildTreeCmd() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/C", "ping -n 10 127.0.0.1 >NUL"}
+	}
+	return []string{"sh", "-c", `sleep 30 & echo $! > child.pid; wait`}
 }
 
 func TestProcessSupervisorLaunchAndStop(t *testing.T) {
@@ -189,4 +198,57 @@ func TestProcessSupervisorLaunchesIntoPerAgentWorkDir(t *testing.T) {
 	require.Equal(t, filepath.Clean(filepath.Join(workDir, ".cache")), filepath.Clean(strings.TrimSpace(lines[3])))
 	require.Equal(t, filepath.Clean(filepath.Join(workDir, ".local", "share")), filepath.Clean(strings.TrimSpace(lines[4])))
 	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(lines[5])))
+}
+
+func TestProcessSupervisorAttachedProcessTreeStopsSubprocesses(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("attached process tree semantics are only asserted on unix in this test")
+	}
+
+	baseDir := t.TempDir()
+	sup := NewProcessSupervisor(
+		nil,
+		WithWorkDirBase(baseDir),
+		WithAttachedProcessTree(),
+	)
+	require.False(t, sup.detachGroup)
+
+	ctx := context.Background()
+	guildID := "guild-attach"
+	agentID := "agent-attach"
+
+	agent := NewManagedAgent(guildID, agentID)
+	sup.mu.Lock()
+	sup.agents[scopedAgentKey(guildID, agentID)] = agent
+	sup.mu.Unlock()
+
+	require.NoError(t, sup.startProcess(ctx, guildID, agent, &protocol.AgentSpec{}, getChildTreeCmd(), nil))
+
+	workDir := sup.resolveAgentWorkDir(guildID, agentID)
+	childPIDPath := filepath.Join(workDir, "child.pid")
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(childPIDPath)
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	childPIDRaw, err := os.ReadFile(childPIDPath)
+	require.NoError(t, err)
+
+	childPID, err := strconv.Atoi(strings.TrimSpace(string(childPIDRaw)))
+	require.NoError(t, err)
+
+	childAlive, err := gopsprocess.PidExists(int32(childPID))
+	require.NoError(t, err)
+	require.True(t, childAlive)
+
+	require.NoError(t, sup.Stop(ctx, guildID, agentID))
+
+	require.Eventually(t, func() bool {
+		alive, err := gopsprocess.PidExists(int32(childPID))
+		return err == nil && !alive
+	}, 5*time.Second, 50*time.Millisecond)
+
+	status, err := sup.Status(ctx, guildID, agentID)
+	require.NoError(t, err)
+	require.Equal(t, string(StateStopped), status)
 }

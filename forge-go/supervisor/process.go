@@ -30,6 +30,7 @@ type ProcessSupervisor struct {
 	rdb         *redis.Client
 	workDirBase string
 	orgID       string
+	detachGroup bool
 }
 
 type ProcessSupervisorOption func(*ProcessSupervisor)
@@ -48,12 +49,19 @@ func WithOrganizationID(orgID string) ProcessSupervisorOption {
 	}
 }
 
+func WithAttachedProcessTree() ProcessSupervisorOption {
+	return func(p *ProcessSupervisor) {
+		p.detachGroup = false
+	}
+}
+
 func NewProcessSupervisor(rdb *redis.Client, opts ...ProcessSupervisorOption) *ProcessSupervisor {
 	p := &ProcessSupervisor{
 		agents:      make(map[string]*ManagedAgent),
 		rdb:         rdb,
 		workDirBase: resolveProcessWorkDirBase(""),
 		orgID:       "default-org",
+		detachGroup: true,
 	}
 
 	for _, opt := range opts {
@@ -125,7 +133,7 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 	stdoutPipe, _ := cmd.StdoutPipe()
 	stderrPipe, _ := cmd.StderrPipe()
 
-	configureCommandForProcessGroup(cmd)
+	configureCommandForProcessGroup(cmd, p.detachGroup)
 
 	startBootTime := time.Now()
 	if err := cmd.Start(); err != nil {
@@ -366,7 +374,7 @@ func (p *ProcessSupervisor) Stop(ctx context.Context, guildID, agentID string) e
 	pid := agent.GetPID()
 
 	if pid > 0 {
-		_ = terminateProcessTree(pid)
+		_ = terminateProcessTree(pid, p.detachGroup)
 	}
 
 	if p.rdb != nil {

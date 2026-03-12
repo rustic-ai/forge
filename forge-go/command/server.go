@@ -24,6 +24,7 @@ var (
 	serverClientMemory     int
 	serverClientGPUs       int
 	serverClientSupervisor string
+	serverClientAttachTree bool
 )
 
 func init() {
@@ -41,6 +42,7 @@ func init() {
 	ServerCmd.Flags().IntVar(&serverClientMemory, "client-memory", 0, "Override memory (MB) for in-process client")
 	ServerCmd.Flags().IntVar(&serverClientGPUs, "client-gpus", 0, "Override GPUs for in-process client")
 	ServerCmd.Flags().StringVar(&serverClientSupervisor, "client-default-supervisor", "", "Default supervisor for in-process client (docker, bwrap)")
+	ServerCmd.Flags().BoolVar(&serverClientAttachTree, "client-attach-process-tree", false, "When used with --with-client and process supervisor, launch agent processes in the server process tree so they exit with the server")
 
 	RootCmd.AddCommand(ServerCmd)
 }
@@ -69,6 +71,7 @@ var ServerCmd = &cobra.Command{
 			ClientMemory:            serverClientMemory,
 			ClientGPUs:              serverClientGPUs,
 			ClientDefaultSupervisor: serverClientSupervisor,
+			ClientAttachProcessTree: serverClientAttachTree,
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())

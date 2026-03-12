@@ -2293,7 +2293,7 @@
   },
   "info": {
     "title": "Rustic AI API",
-    "version": "0.0.8"
+    "version": "0.0.9"
   },
   "openapi": "3.0.3",
   "paths": {

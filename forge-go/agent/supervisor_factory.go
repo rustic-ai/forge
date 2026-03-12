@@ -6,13 +6,16 @@ import (
 	"github.com/rustic-ai/forge/forge-go/supervisor"
 )
 
-func buildOrgSupervisorFactory(rdb *redis.Client, defaultSupervisor, dataDir string) control.SupervisorFactory {
+func buildOrgSupervisorFactory(rdb *redis.Client, defaultSupervisor, dataDir string, attachProcessTree bool) control.SupervisorFactory {
 	return func(orgID string) supervisor.AgentSupervisor {
-		processSup := supervisor.NewProcessSupervisor(
-			rdb,
+		opts := []supervisor.ProcessSupervisorOption{
 			supervisor.WithOrganizationID(orgID),
 			supervisor.WithWorkDirBase(dataDir),
-		)
+		}
+		if attachProcessTree {
+			opts = append(opts, supervisor.WithAttachedProcessTree())
+		}
+		processSup := supervisor.NewProcessSupervisor(rdb, opts...)
 
 		var dockerSup *supervisor.DockerSupervisor
 		if ds, err := supervisor.NewDockerSupervisor(rdb); err == nil && ds.Available() {
