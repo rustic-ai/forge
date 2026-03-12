@@ -193,6 +193,9 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 	if err := os.MkdirAll(fsBasePath, 0755); err != nil {
 		return fmt.Errorf("failed to create filesystem workspace base path: %w", err)
 	}
+	if strings.TrimSpace(os.Getenv("FORGE_FILESYSTEM_GLOBAL_ROOT")) == "" {
+		_ = os.Setenv("FORGE_FILESYSTEM_GLOBAL_ROOT", fsBasePath)
+	}
 	resolver := filesystem.NewFileSystemResolver(fsBasePath)
 	fileStore := filesystem.NewLocalFileStore(resolver)
 

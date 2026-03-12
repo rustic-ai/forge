@@ -157,3 +157,61 @@ func TestBuildAgentEnv_RedisOSOverride(t *testing.T) {
 		t.Errorf("Unexpected redis_client inner map: %v", rc)
 	}
 }
+
+func TestBuildAgentEnv_SerializesAgentDependencyMap(t *testing.T) {
+	ctx := context.Background()
+
+	guildSpec := &protocol.GuildSpec{
+		ID:   "test-agent-config",
+		Name: "Test Agent Config",
+	}
+
+	agentSpec := &protocol.AgentSpec{
+		ID:        "AgentC",
+		Name:      "Agent C",
+		ClassName: "test.AgentC",
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"protocol":  "s3",
+					"path_base": "s3://forge-bucket/root/private",
+				},
+			},
+		},
+	}
+
+	envSlice, err := BuildAgentEnv(ctx, guildSpec, agentSpec, nil, &mockSecretProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("BuildAgentEnv failed: %v", err)
+	}
+
+	envMap := make(map[string]string)
+	for _, e := range envSlice {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	var parsedAgent map[string]interface{}
+	if err := json.Unmarshal([]byte(envMap["FORGE_AGENT_CONFIG_JSON"]), &parsedAgent); err != nil {
+		t.Fatalf("Failed to parse FORGE_AGENT_CONFIG_JSON: %v", err)
+	}
+
+	depMap, ok := parsedAgent["dependency_map"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dependency_map missing from FORGE_AGENT_CONFIG_JSON: %v", parsedAgent)
+	}
+	fsDep, ok := depMap["filesystem"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("filesystem dependency missing from FORGE_AGENT_CONFIG_JSON: %v", depMap)
+	}
+	props, ok := fsDep["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("filesystem properties missing from FORGE_AGENT_CONFIG_JSON: %v", fsDep)
+	}
+	if props["protocol"] != "s3" || props["path_base"] != "s3://forge-bucket/root/private" {
+		t.Errorf("unexpected filesystem properties in FORGE_AGENT_CONFIG_JSON: %v", props)
+	}
+}

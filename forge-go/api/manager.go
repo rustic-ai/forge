@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rustic-ai/forge/forge-go/guild"
 	"github.com/rustic-ai/forge/forge-go/guild/store"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 )
@@ -103,6 +104,10 @@ func (s *Server) HandleManagerEnsureGuild(w http.ResponseWriter, r *http.Request
 
 	spec := req.GuildSpec
 	normalizeManagerSpecIDs(spec)
+	if err := guild.ApplyFilesystemGlobalRoot(spec, strings.TrimSpace(os.Getenv("FORGE_FILESYSTEM_GLOBAL_ROOT"))); err != nil {
+		ReplyError(w, http.StatusUnprocessableEntity, "invalid filesystem dependency: "+err.Error())
+		return
+	}
 
 	guildModel := store.FromGuildSpec(spec, req.OrganizationID)
 	guildModel.Status = store.GuildStatusPendingLaunch

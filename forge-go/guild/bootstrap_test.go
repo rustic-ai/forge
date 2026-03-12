@@ -217,3 +217,241 @@ filesystem:
 		spec.DependencyMap["filesystem"].ClassName,
 	)
 }
+
+func TestApplyFilesystemGlobalRoot_RewritesPathBaseOnce(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "/uploads",
+					"protocol":  "file",
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, root)
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(root, "uploads"), spec.DependencyMap["filesystem"].Properties["path_base"])
+
+	err = ApplyFilesystemGlobalRoot(spec, root)
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(root, "uploads"), spec.DependencyMap["filesystem"].Properties["path_base"])
+}
+
+func TestApplyFilesystemGlobalRoot_UsesRootWhenPathBaseMissing(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName:  "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, root)
+	require.NoError(t, err)
+	require.Equal(t, root, spec.DependencyMap["filesystem"].Properties["path_base"])
+}
+
+func TestApplyFilesystemGlobalRoot_RejectsTraversal(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "../escape",
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, root)
+	require.ErrorContains(t, err, "path traversal")
+}
+
+func TestApplyFilesystemGlobalRoot_RewritesS3PathBaseAndProtocol(t *testing.T) {
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "uploads",
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, "s3://forge-bucket/root")
+	require.NoError(t, err)
+	require.Equal(t, "s3", spec.DependencyMap["filesystem"].Properties["protocol"])
+	require.Equal(t, "s3://forge-bucket/root/uploads", spec.DependencyMap["filesystem"].Properties["path_base"])
+
+	err = ApplyFilesystemGlobalRoot(spec, "s3://forge-bucket/root")
+	require.NoError(t, err)
+	require.Equal(t, "s3://forge-bucket/root/uploads", spec.DependencyMap["filesystem"].Properties["path_base"])
+}
+
+func TestApplyFilesystemGlobalRoot_RewritesGCSPathBaseAndProtocol(t *testing.T) {
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "/uploads",
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, "gs://forge-bucket/root")
+	require.NoError(t, err)
+	require.Equal(t, "gs", spec.DependencyMap["filesystem"].Properties["protocol"])
+	require.Equal(t, "gs://forge-bucket/root/uploads", spec.DependencyMap["filesystem"].Properties["path_base"])
+}
+
+func TestApplyFilesystemGlobalRoot_RewritesAgentLevelDependency(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	spec := &protocol.GuildSpec{
+		Agents: []protocol.AgentSpec{
+			{
+				ID: "g-1#a-0",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, root)
+	require.NoError(t, err)
+	require.Equal(t, "file", spec.Agents[0].DependencyMap["filesystem"].Properties["protocol"])
+	require.Equal(t, filepath.Join(root, "private"), spec.Agents[0].DependencyMap["filesystem"].Properties["path_base"])
+}
+
+func TestApplyFilesystemGlobalRoot_RewritesAgentLevelObjectStoreDependency(t *testing.T) {
+	spec := &protocol.GuildSpec{
+		Agents: []protocol.AgentSpec{
+			{
+				ID: "g-1#a-0",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, "s3://forge-bucket/root")
+	require.NoError(t, err)
+	require.Equal(t, "s3", spec.Agents[0].DependencyMap["filesystem"].Properties["protocol"])
+	require.Equal(t, "s3://forge-bucket/root/private", spec.Agents[0].DependencyMap["filesystem"].Properties["path_base"])
+}
+
+func TestApplyFilesystemGlobalRoot_AgentLevelIsIdempotent(t *testing.T) {
+	spec := &protocol.GuildSpec{
+		Agents: []protocol.AgentSpec{
+			{
+				ID: "g-1#a-0",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "s3://forge-bucket/root/private",
+							"protocol":  "s3",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, "s3://forge-bucket/root")
+	require.NoError(t, err)
+	require.Equal(t, "s3://forge-bucket/root/private", spec.Agents[0].DependencyMap["filesystem"].Properties["path_base"])
+}
+
+func TestApplyFilesystemGlobalRoot_AgentLevelRejectsTraversal(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	spec := &protocol.GuildSpec{
+		Agents: []protocol.AgentSpec{
+			{
+				ID: "g-1#a-0",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "../private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, root)
+	require.ErrorContains(t, err, "path traversal")
+}
+
+func TestApplyFilesystemGlobalRoot_PreservesMatchingQualifiedObjectURL(t *testing.T) {
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "s3://forge-bucket/root/uploads",
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, "s3://forge-bucket/root")
+	require.NoError(t, err)
+	require.Equal(t, "s3://forge-bucket/root/uploads", spec.DependencyMap["filesystem"].Properties["path_base"])
+	require.Equal(t, "s3", spec.DependencyMap["filesystem"].Properties["protocol"])
+}
+
+func TestApplyFilesystemGlobalRoot_RejectsObjectStoreSchemeMismatch(t *testing.T) {
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "gs://forge-bucket/root/uploads",
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, "s3://forge-bucket/root")
+	require.ErrorContains(t, err, "does not match Forge global root scheme")
+}
+
+func TestApplyFilesystemGlobalRoot_RejectsObjectStoreBucketMismatch(t *testing.T) {
+	spec := &protocol.GuildSpec{
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "s3://other-bucket/root/uploads",
+				},
+			},
+		},
+	}
+
+	err := ApplyFilesystemGlobalRoot(spec, "s3://forge-bucket/root")
+	require.ErrorContains(t, err, "does not match Forge global root bucket")
+}

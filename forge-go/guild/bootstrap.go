@@ -22,6 +22,9 @@ func Bootstrap(ctx context.Context, db store.Store, redisClient *redis.Client, s
 	if err := mergeDependencies(spec, dependencyConfigPath); err != nil {
 		return nil, fmt.Errorf("failed to merge dependencies: %w", err)
 	}
+	if err := ApplyFilesystemGlobalRoot(spec, strings.TrimSpace(os.Getenv(forgeFilesystemGlobalRootEnv))); err != nil {
+		return nil, fmt.Errorf("failed to normalize filesystem dependency: %w", err)
+	}
 
 	guildModel, agentModels := buildModels(spec, orgID)
 	normalizeRuntimeSpecIDs(spec, guildModel.ID)

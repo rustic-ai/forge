@@ -61,6 +61,10 @@ filesystem:
 	mux.HandleFunc("GET /api/guilds/{id}/files/", srv.HandleFileList)
 	mux.HandleFunc("GET /api/guilds/{id}/files/{filename}", srv.HandleFileDownload)
 	mux.HandleFunc("DELETE /api/guilds/{id}/files/{filename}", srv.HandleFileDelete)
+	mux.HandleFunc("POST /api/guilds/{id}/agents/{agent_id}/files/", srv.HandleAgentFileUpload)
+	mux.HandleFunc("GET /api/guilds/{id}/agents/{agent_id}/files/", srv.HandleAgentFileList)
+	mux.HandleFunc("GET /api/guilds/{id}/agents/{agent_id}/files/{filename}", srv.HandleAgentFileDownload)
+	mux.HandleFunc("DELETE /api/guilds/{id}/agents/{agent_id}/files/{filename}", srv.HandleAgentFileDelete)
 
 	cleanup := func() {
 		rdb.Close()

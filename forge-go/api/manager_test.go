@@ -190,4 +190,206 @@ func TestManagerEndpointAuthToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, auth.StatusCode)
 }
 
+func TestManagerEnsureGuild_CreatesWithResolvedFilesystemPathBase(t *testing.T) {
+	ts, _ := newManagerTestServer(t)
+	globalRoot := filepath.Join(t.TempDir(), "workspaces")
+	t.Setenv("FORGE_FILESYSTEM_GLOBAL_ROOT", globalRoot)
+
+	spec := &protocol.GuildSpec{
+		ID:          "g-manager-fs",
+		Name:        "Manager FS",
+		Description: "persists resolved filesystem path",
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "uploads",
+					"protocol":  "file",
+				},
+			},
+		},
+		Agents: []protocol.AgentSpec{
+			{
+				ID:          "g-manager-fs#a-0",
+				Name:        "Worker",
+				Description: "worker",
+				ClassName:   "test.Agent",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-fs"}
+	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var ensureResp EnsureGuildResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&ensureResp))
+	require.NotNil(t, ensureResp.GuildSpec)
+
+	fsDep, ok := ensureResp.GuildSpec.DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(globalRoot, "uploads"), fsDep.Properties["path_base"])
+	require.Len(t, ensureResp.GuildSpec.Agents, 1)
+	agentDep, ok := ensureResp.GuildSpec.Agents[0].DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(globalRoot, "private"), agentDep.Properties["path_base"])
+
+	resp2 := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
+	defer resp2.Body.Close()
+	require.Equal(t, http.StatusOK, resp2.StatusCode)
+
+	var ensureResp2 EnsureGuildResponse
+	require.NoError(t, json.NewDecoder(resp2.Body).Decode(&ensureResp2))
+	require.NotNil(t, ensureResp2.GuildSpec)
+	fsDep2, ok := ensureResp2.GuildSpec.DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(globalRoot, "uploads"), fsDep2.Properties["path_base"])
+	require.Len(t, ensureResp2.GuildSpec.Agents, 1)
+	agentDep2, ok := ensureResp2.GuildSpec.Agents[0].DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(globalRoot, "private"), agentDep2.Properties["path_base"])
+}
+
+func TestManagerEnsureGuild_RejectsFilesystemTraversal(t *testing.T) {
+	ts, _ := newManagerTestServer(t)
+	t.Setenv("FORGE_FILESYSTEM_GLOBAL_ROOT", filepath.Join(t.TempDir(), "workspaces"))
+
+	spec := &protocol.GuildSpec{
+		ID:          "g-manager-bad-fs",
+		Name:        "Manager Bad FS",
+		Description: "rejects traversal",
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "../escape",
+					"protocol":  "file",
+				},
+			},
+		},
+	}
+
+	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-fs"}
+	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+}
+
+func TestManagerEnsureGuild_CreatesWithS3FilesystemGlobalRoot(t *testing.T) {
+	ts, _ := newManagerTestServer(t)
+	t.Setenv("FORGE_FILESYSTEM_GLOBAL_ROOT", "s3://forge-bucket/root")
+
+	spec := &protocol.GuildSpec{
+		ID:          "g-manager-s3",
+		Name:        "Manager S3",
+		Description: "persists resolved object store path",
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "uploads",
+				},
+			},
+		},
+		Agents: []protocol.AgentSpec{
+			{
+				ID:          "g-manager-s3#a-0",
+				Name:        "Worker",
+				Description: "worker",
+				ClassName:   "test.Agent",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-s3"}
+	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var ensureResp EnsureGuildResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&ensureResp))
+	require.NotNil(t, ensureResp.GuildSpec)
+
+	fsDep, ok := ensureResp.GuildSpec.DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, "s3", fsDep.Properties["protocol"])
+	assert.Equal(t, "s3://forge-bucket/root/uploads", fsDep.Properties["path_base"])
+	require.Len(t, ensureResp.GuildSpec.Agents, 1)
+	agentDep, ok := ensureResp.GuildSpec.Agents[0].DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, "s3", agentDep.Properties["protocol"])
+	assert.Equal(t, "s3://forge-bucket/root/private", agentDep.Properties["path_base"])
+}
+
+func TestManagerEnsureGuild_CreatesWithGCSFilesystemGlobalRoot(t *testing.T) {
+	ts, _ := newManagerTestServer(t)
+	t.Setenv("FORGE_FILESYSTEM_GLOBAL_ROOT", "gs://forge-bucket/root")
+
+	spec := &protocol.GuildSpec{
+		ID:          "g-manager-gcs",
+		Name:        "Manager GCS",
+		Description: "persists resolved gcs path",
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "uploads",
+				},
+			},
+		},
+		Agents: []protocol.AgentSpec{
+			{
+				ID:          "g-manager-gcs#a-0",
+				Name:        "Worker",
+				Description: "worker",
+				ClassName:   "test.Agent",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-gcs"}
+	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var ensureResp EnsureGuildResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&ensureResp))
+	require.NotNil(t, ensureResp.GuildSpec)
+
+	fsDep, ok := ensureResp.GuildSpec.DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, "gs", fsDep.Properties["protocol"])
+	assert.Equal(t, "gs://forge-bucket/root/uploads", fsDep.Properties["path_base"])
+	require.Len(t, ensureResp.GuildSpec.Agents, 1)
+	agentDep, ok := ensureResp.GuildSpec.Agents[0].DependencyMap["filesystem"]
+	require.True(t, ok)
+	assert.Equal(t, "gs", agentDep.Properties["protocol"])
+	assert.Equal(t, "gs://forge-bucket/root/private", agentDep.Properties["path_base"])
+}
+
 func strPtr(v string) *string { return &v }

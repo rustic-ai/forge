@@ -207,3 +207,259 @@ func TestBootstrap_Flow_NormalizesSpawnedGuildSpecIDs(t *testing.T) {
 		t.Fatalf("persisted agent guild id mismatch")
 	}
 }
+
+func TestBootstrap_Flow_PersistsResolvedFilesystemPathBase(t *testing.T) {
+	ctx := context.Background()
+
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("start miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	db, err := store.NewGormStore(store.DriverSQLite, "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("create sqlite store: %v", err)
+	}
+	defer db.Close()
+
+	globalRoot := filepath.Join(t.TempDir(), "workspaces")
+	t.Setenv(forgeFilesystemGlobalRootEnv, globalRoot)
+
+	spec := &protocol.GuildSpec{
+		ID:          "bootstrap-fs-guild",
+		Name:        "Bootstrap FS",
+		Description: "Verifies filesystem path propagation",
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "uploads",
+					"protocol":  "file",
+				},
+			},
+		},
+		Agents: []protocol.AgentSpec{
+			{
+				ID:          "bootstrap-fs-guild#a-0",
+				Name:        "Worker",
+				Description: "worker",
+				ClassName:   "rustic_ai.core.agents.testutils.echo_agent.EchoAgent",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err = Bootstrap(ctx, db, rdb, spec, "org-bootstrap", filepath.Join(t.TempDir(), "missing-agent-deps.yaml"))
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	guildModel, err := db.GetGuild("bootstrap-fs-guild")
+	if err != nil {
+		t.Fatalf("get guild: %v", err)
+	}
+
+	storedSpec := store.ToGuildSpec(guildModel)
+	fsDep, ok := storedSpec.DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected persisted filesystem dependency")
+	}
+	if got, _ := fsDep.Properties["path_base"].(string); got != filepath.Join(globalRoot, "uploads") {
+		t.Fatalf("expected persisted path_base %q, got %q", filepath.Join(globalRoot, "uploads"), got)
+	}
+	if len(storedSpec.Agents) != 1 {
+		t.Fatalf("expected one persisted agent")
+	}
+	agentDep, ok := storedSpec.Agents[0].DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected persisted agent filesystem dependency")
+	}
+	if got, _ := agentDep.Properties["path_base"].(string); got != filepath.Join(globalRoot, "private") {
+		t.Fatalf("expected persisted agent path_base %q, got %q", filepath.Join(globalRoot, "private"), got)
+	}
+
+	raw, err := rdb.RPop(ctx, "forge:control:requests").Result()
+	if err != nil {
+		t.Fatalf("pop control request: %v", err)
+	}
+
+	var wrapper struct {
+		Command string                `json:"command"`
+		Payload protocol.SpawnRequest `json:"payload"`
+	}
+	if err := json.Unmarshal([]byte(raw), &wrapper); err != nil {
+		t.Fatalf("decode control wrapper: %v", err)
+	}
+
+	rawGuildSpec, ok := wrapper.Payload.ClientProperties["guild_spec"].(string)
+	if !ok || rawGuildSpec == "" {
+		t.Fatalf("expected client_properties.guild_spec string in spawn payload")
+	}
+
+	var spawnedSpec protocol.GuildSpec
+	if err := json.Unmarshal([]byte(rawGuildSpec), &spawnedSpec); err != nil {
+		t.Fatalf("decode spawn guild_spec: %v", err)
+	}
+
+	spawnedDep, ok := spawnedSpec.DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected spawned filesystem dependency")
+	}
+	if got, _ := spawnedDep.Properties["path_base"].(string); got != filepath.Join(globalRoot, "uploads") {
+		t.Fatalf("expected spawned path_base %q, got %q", filepath.Join(globalRoot, "uploads"), got)
+	}
+	if len(spawnedSpec.Agents) != 1 {
+		t.Fatalf("expected one spawned agent")
+	}
+	spawnedAgentDep, ok := spawnedSpec.Agents[0].DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected spawned agent filesystem dependency")
+	}
+	if got, _ := spawnedAgentDep.Properties["path_base"].(string); got != filepath.Join(globalRoot, "private") {
+		t.Fatalf("expected spawned agent path_base %q, got %q", filepath.Join(globalRoot, "private"), got)
+	}
+}
+
+func TestBootstrap_Flow_PersistsResolvedS3FilesystemPathBase(t *testing.T) {
+	ctx := context.Background()
+
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("start miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	db, err := store.NewGormStore(store.DriverSQLite, "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("create sqlite store: %v", err)
+	}
+	defer db.Close()
+
+	t.Setenv(forgeFilesystemGlobalRootEnv, "s3://forge-bucket/root")
+
+	spec := &protocol.GuildSpec{
+		ID:          "bootstrap-s3-guild",
+		Name:        "Bootstrap S3",
+		Description: "Verifies object store filesystem path propagation",
+		DependencyMap: map[string]protocol.DependencySpec{
+			"filesystem": {
+				ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+				Properties: map[string]interface{}{
+					"path_base": "uploads",
+				},
+			},
+		},
+		Agents: []protocol.AgentSpec{
+			{
+				ID:          "bootstrap-s3-guild#a-0",
+				Name:        "Worker",
+				Description: "worker",
+				ClassName:   "rustic_ai.core.agents.testutils.echo_agent.EchoAgent",
+				DependencyMap: map[string]protocol.DependencySpec{
+					"filesystem": {
+						ClassName: "rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver",
+						Properties: map[string]interface{}{
+							"path_base": "private",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err = Bootstrap(ctx, db, rdb, spec, "org-bootstrap", filepath.Join(t.TempDir(), "missing-agent-deps.yaml"))
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	guildModel, err := db.GetGuild("bootstrap-s3-guild")
+	if err != nil {
+		t.Fatalf("get guild: %v", err)
+	}
+
+	storedSpec := store.ToGuildSpec(guildModel)
+	fsDep, ok := storedSpec.DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected persisted filesystem dependency")
+	}
+	if got, _ := fsDep.Properties["protocol"].(string); got != "s3" {
+		t.Fatalf("expected persisted protocol %q, got %q", "s3", got)
+	}
+	if got, _ := fsDep.Properties["path_base"].(string); got != "s3://forge-bucket/root/uploads" {
+		t.Fatalf("expected persisted path_base %q, got %q", "s3://forge-bucket/root/uploads", got)
+	}
+	if len(storedSpec.Agents) != 1 {
+		t.Fatalf("expected one persisted agent")
+	}
+	agentDep, ok := storedSpec.Agents[0].DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected persisted agent filesystem dependency")
+	}
+	if got, _ := agentDep.Properties["protocol"].(string); got != "s3" {
+		t.Fatalf("expected persisted agent protocol %q, got %q", "s3", got)
+	}
+	if got, _ := agentDep.Properties["path_base"].(string); got != "s3://forge-bucket/root/private" {
+		t.Fatalf("expected persisted agent path_base %q, got %q", "s3://forge-bucket/root/private", got)
+	}
+
+	raw, err := rdb.RPop(ctx, "forge:control:requests").Result()
+	if err != nil {
+		t.Fatalf("pop control request: %v", err)
+	}
+
+	var wrapper struct {
+		Command string                `json:"command"`
+		Payload protocol.SpawnRequest `json:"payload"`
+	}
+	if err := json.Unmarshal([]byte(raw), &wrapper); err != nil {
+		t.Fatalf("decode control wrapper: %v", err)
+	}
+
+	rawGuildSpec, ok := wrapper.Payload.ClientProperties["guild_spec"].(string)
+	if !ok || rawGuildSpec == "" {
+		t.Fatalf("expected client_properties.guild_spec string in spawn payload")
+	}
+
+	var spawnedSpec protocol.GuildSpec
+	if err := json.Unmarshal([]byte(rawGuildSpec), &spawnedSpec); err != nil {
+		t.Fatalf("decode spawn guild_spec: %v", err)
+	}
+
+	spawnedDep, ok := spawnedSpec.DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected spawned filesystem dependency")
+	}
+	if got, _ := spawnedDep.Properties["protocol"].(string); got != "s3" {
+		t.Fatalf("expected spawned protocol %q, got %q", "s3", got)
+	}
+	if got, _ := spawnedDep.Properties["path_base"].(string); got != "s3://forge-bucket/root/uploads" {
+		t.Fatalf("expected spawned path_base %q, got %q", "s3://forge-bucket/root/uploads", got)
+	}
+	if len(spawnedSpec.Agents) != 1 {
+		t.Fatalf("expected one spawned agent")
+	}
+	spawnedAgentDep, ok := spawnedSpec.Agents[0].DependencyMap["filesystem"]
+	if !ok {
+		t.Fatalf("expected spawned agent filesystem dependency")
+	}
+	if got, _ := spawnedAgentDep.Properties["protocol"].(string); got != "s3" {
+		t.Fatalf("expected spawned agent protocol %q, got %q", "s3", got)
+	}
+	if got, _ := spawnedAgentDep.Properties["path_base"].(string); got != "s3://forge-bucket/root/private" {
+		t.Fatalf("expected spawned agent path_base %q, got %q", "s3://forge-bucket/root/private", got)
+	}
+}
