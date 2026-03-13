@@ -1,8 +1,9 @@
 package contract
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 // UnimplementedServer provides default 501 responses for all generated operations.

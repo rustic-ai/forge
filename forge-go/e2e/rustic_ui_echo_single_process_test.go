@@ -47,14 +47,12 @@ func TestE2E_RusticUIEchoLaunchSingleProcess(t *testing.T) {
 
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
-
 	forgeRoot := filepath.Clean(filepath.Join(cwd, "..", ".."))
-	rusticUIRoot := filepath.Clean(filepath.Join(forgeRoot, "..", "rustic-ui"))
 
 	server := startSingleProcessForgeServer(t, binPath, forgeRoot)
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	seededBlueprintID := seedRusticUIEchoCatalog(t, client, server.rusticBase, rusticUIRoot)
+	seededBlueprintID := seedRusticUIEchoCatalog(t, client, server.rusticBase)
 
 	blueprintID := selectRusticUIEchoBlueprint(t, client, server.rusticBase)
 	require.Equal(t, seededBlueprintID, blueprintID)
@@ -257,14 +255,14 @@ func startSingleProcessForgeServer(t *testing.T, binPath, forgeRoot string) *sin
 	}
 }
 
-func seedRusticUIEchoCatalog(t *testing.T, client *http.Client, rusticBase, rusticUIRoot string) string {
+func seedRusticUIEchoCatalog(t *testing.T, client *http.Client, rusticBase string) string {
 	t.Helper()
 
-	agentPayload := loadRusticUIEchoAgentPayload(t, rusticUIRoot)
+	agentPayload := loadRusticUIEchoAgentPayload(t)
 	status, body := postRawJSON(t, client, rusticBase+"/catalog/agents", agentPayload)
 	require.Equal(t, http.StatusCreated, status, "register echo agent failed: %s", string(body))
 
-	blueprintPayload := loadRusticUIEchoBlueprint(t, rusticUIRoot)
+	blueprintPayload := loadRusticUIEchoBlueprint(t)
 	respBody, respStatus := postJSON(t, client, rusticBase+"/catalog/blueprints/", blueprintPayload, nil)
 	require.Equal(t, http.StatusCreated, respStatus, "create echo blueprint failed: %s", string(respBody))
 
@@ -276,31 +274,27 @@ func seedRusticUIEchoCatalog(t *testing.T, client *http.Client, rusticBase, rust
 	return created.ID
 }
 
-func loadRusticUIEchoAgentPayload(t *testing.T, rusticUIRoot string) json.RawMessage {
+func loadRusticUIEchoAgentPayload(t *testing.T) json.RawMessage {
 	t.Helper()
 
-	agentsPath := filepath.Join(rusticUIRoot, "electron-resources", "rustic-seed", "agents.json")
-	raw, err := os.ReadFile(agentsPath)
-	require.NoError(t, err)
-
-	var agents map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(raw, &agents))
-
-	payload, ok := agents["rustic_ai.core.agents.testutils.echo_agent.EchoAgent"]
-	require.True(t, ok, "echo agent missing from %s", agentsPath)
-	return payload
+	return mustReadRusticUITestdata(t, "echo_agent.json")
 }
 
-func loadRusticUIEchoBlueprint(t *testing.T, rusticUIRoot string) map[string]interface{} {
+func loadRusticUIEchoBlueprint(t *testing.T) map[string]interface{} {
 	t.Helper()
 
-	blueprintPath := filepath.Join(rusticUIRoot, "electron-resources", "rustic-seed", "blueprints", "echo_app.json")
-	raw, err := os.ReadFile(blueprintPath)
-	require.NoError(t, err)
-
+	raw := mustReadRusticUITestdata(t, "echo_app.json")
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(raw, &payload))
 	return payload
+}
+
+func mustReadRusticUITestdata(t *testing.T, filename string) json.RawMessage {
+	t.Helper()
+
+	raw, err := os.ReadFile(filepath.Join("testdata", "rustic_ui_seed", filename))
+	require.NoError(t, err)
+	return raw
 }
 
 func selectRusticUIEchoBlueprint(t *testing.T, client *http.Client, rusticBase string) string {

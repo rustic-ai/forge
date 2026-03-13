@@ -1,0 +1,232 @@
+{
+  "agent_name": "EchoAgent",
+  "qualified_class_name": "rustic_ai.core.agents.testutils.echo_agent.EchoAgent",
+  "agent_doc": "An Agent that echoes the received message back to the sender.",
+  "agent_props_schema": {
+    "description": "Empty class for Agent properties.",
+    "properties": {},
+    "title": "BaseAgentProps",
+    "type": "object"
+  },
+  "message_handlers": {
+    "echo_message": {
+      "handler_name": "echo_message",
+      "message_format": "generic_json",
+      "message_format_schema": {
+        "type": "object"
+      },
+      "handler_doc": null,
+      "send_message_calls": [
+        {
+          "calling_class": "EchoAgent",
+          "calling_function": "echo_message",
+          "call_type": "send_dict",
+          "message_type": "ctx.format"
+        }
+      ]
+    },
+    "send_first_heartbeat": {
+      "handler_name": "send_first_heartbeat",
+      "message_format": "rustic_ai.core.guild.agent.SelfReadyNotification",
+      "message_format_schema": {
+        "description": "Notification message to indicate that the agent is ready to process messages.\nThis is sent to the agent itself.",
+        "properties": {
+          "message": {
+            "default": "Agent is ready",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "SelfReadyNotification",
+        "type": "object"
+      },
+      "handler_doc": "\nNotification message to indicate that the agent is ready to process messages.\nThis is sent to the agent itself.\n",
+      "send_message_calls": []
+    },
+    "send_heartbeat": {
+      "handler_name": "send_heartbeat",
+      "message_format": "rustic_ai.core.guild.agent_ext.mixins.health.HealthCheckRequest",
+      "message_format_schema": {
+        "properties": {
+          "checktime": {
+            "format": "date-time",
+            "title": "Checktime",
+            "type": "string"
+          }
+        },
+        "title": "HealthCheckRequest",
+        "type": "object"
+      },
+      "handler_doc": null,
+      "send_message_calls": []
+    },
+    "update_local_state": {
+      "handler_name": "update_local_state",
+      "message_format": "rustic_ai.core.state.models.StateFetchResponse",
+      "message_format_schema": {
+        "$defs": {
+          "JsonValue": {},
+          "StateOwner": {
+            "description": "An enumeration of the owners of the state.",
+            "enum": [
+              "agent",
+              "guild"
+            ],
+            "title": "StateOwner",
+            "type": "string"
+          }
+        },
+        "description": "A class to represent the the state of an agent or the guild.",
+        "properties": {
+          "state_owner": {
+            "$ref": "#/$defs/StateOwner",
+            "description": "The owner of the state. The owner can be an agent or the guild."
+          },
+          "guild_id": {
+            "description": "The ID of the guild from which the state was fetched.",
+            "title": "Guild Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The ID of the agent to which the state belongs. None if the state belongs to the guild.",
+            "title": "Agent Id"
+          },
+          "state": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "description": "The state of the agent or guild. The structure of the state is defined by the agent or guild.",
+            "title": "State",
+            "type": "object"
+          },
+          "version": {
+            "description": "The version of the state. The version is incremented every time the state is updated.",
+            "title": "Version",
+            "type": "integer"
+          },
+          "timestamp": {
+            "description": "The timestamp of the state. The timestamp is the time the state was last updated.",
+            "title": "Timestamp",
+            "type": "integer"
+          },
+          "state_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The path on the state object that was read. None if the entire state object was read.",
+            "title": "State Path"
+          },
+          "fetch_timestamp": {
+            "description": "The timestamp of the state that was read.\n        This is the timestamp of the state that was read, which may be different from the requested timestamp.",
+            "title": "Fetch Timestamp",
+            "type": "integer"
+          },
+          "is_latest": {
+            "description": "True if the state is the latest state, False otherwise.",
+            "title": "Is Latest",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state_owner",
+          "guild_id",
+          "version",
+          "timestamp",
+          "fetch_timestamp",
+          "is_latest"
+        ],
+        "title": "StateFetchResponse",
+        "type": "object"
+      },
+      "handler_doc": "\nA class to represent the the state of an agent or the guild.\n",
+      "send_message_calls": []
+    },
+    "update_local_state_on_update": {
+      "handler_name": "update_local_state_on_update",
+      "message_format": "rustic_ai.core.state.models.StateUpdateResponse",
+      "message_format_schema": {
+        "$defs": {
+          "JsonValue": {},
+          "StateOwner": {
+            "description": "An enumeration of the owners of the state.",
+            "enum": [
+              "agent",
+              "guild"
+            ],
+            "title": "StateOwner",
+            "type": "string"
+          }
+        },
+        "description": "A class to represent the response to a state update request.",
+        "properties": {
+          "state_owner": {
+            "$ref": "#/$defs/StateOwner",
+            "description": "The owner of the state. The owner can be an agent or the guild."
+          },
+          "guild_id": {
+            "description": "The ID of the guild to which the state belongs.",
+            "title": "Guild Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The ID of the agent to which the state belongs. None if the state belongs to the guild.",
+            "title": "Agent Id"
+          },
+          "state": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "description": "The updated state of the agent or guild. The structure of the state is defined by the agent or guild.",
+            "title": "State",
+            "type": "object"
+          },
+          "version": {
+            "description": "The version of the state. The version is incremented every time the state is updated.",
+            "title": "Version",
+            "type": "integer"
+          },
+          "timestamp": {
+            "description": "The timestamp of the state. The timestamp is the time the state was last updated.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state_owner",
+          "guild_id",
+          "version",
+          "timestamp"
+        ],
+        "title": "StateUpdateResponse",
+        "type": "object"
+      },
+      "handler_doc": "\nA class to represent the response to a state update request.\n",
+      "send_message_calls": []
+    }
+  },
+  "agent_dependencies": []
+}

@@ -1,5 +1,12 @@
 .PHONY: build test test-e2e-ladder lint clean cross-compile fmt vet
 
+GOCACHE ?= $(CURDIR)/.gocache
+GOMODCACHE ?= $(CURDIR)/.gomodcache
+GOPATH ?= $(CURDIR)/.gopath
+GOLANGCI_LINT_CACHE ?= $(CURDIR)/.golangci-cache
+
+export GOCACHE GOMODCACHE GOPATH GOLANGCI_LINT_CACHE
+
 VERSION ?= $(shell git describe --tags --always --dirty)
 COMMIT ?= $(shell git rev-parse --short HEAD)
 DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")

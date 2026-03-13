@@ -1,0 +1,76 @@
+{
+  "name": "Simple Echo",
+  "description": "Simple Echo is a lightweight app that mirrors your input. Whatever you say, it says back—perfect for testing, demos, or lightweight message flows.",
+  "version": "v1",
+  "icon": null,
+  "intro_msg": "Hi there! I’ll echo back anything you send me. Give it a try!",
+  "exposure": "public",
+  "author_id": "dummyuserid",
+  "organization_id": null,
+  "category_id": null,
+  "tags": [],
+  "commands": [],
+  "starter_prompts": [],
+  "spec": {
+    "name": "Simple Echo",
+    "description": "Simple Echo is a lightweight app that mirrors your input. Whatever you say, it says back—perfect for testing, demos, or lightweight message flows.",
+    "properties": {},
+    "agents": [
+      {
+        "name": "Echo Agent",
+        "description": "An agent that echoes every message it receives—word for word.",
+        "class_name": "rustic_ai.core.agents.testutils.echo_agent.EchoAgent",
+        "additional_topics": [
+          "echo_topic"
+        ],
+        "properties": {},
+        "listen_to_default_topic": false,
+        "act_only_when_tagged": false,
+        "dependency_map": {}
+      }
+    ],
+    "dependency_map": {},
+    "routes": {
+      "steps": [
+        {
+          "agent": null,
+          "agent_type": "rustic_ai.core.agents.utils.user_proxy_agent.UserProxyAgent",
+          "method_name": "unwrap_and_forward_message",
+          "origin_filter": null,
+          "message_format": null,
+          "destination": {
+            "topics": "echo_topic",
+            "recipient_list": [],
+            "priority": null
+          },
+          "mark_forwarded": false,
+          "route_times": 1,
+          "transformer": null,
+          "agent_state_update": null,
+          "guild_state_update": null
+        },
+        {
+          "agent": {
+            "id": null,
+            "name": "Echo Agent"
+          },
+          "agent_type": null,
+          "method_name": null,
+          "origin_filter": null,
+          "message_format": null,
+          "destination": {
+            "topics": "user_message_broadcast",
+            "recipient_list": [],
+            "priority": null
+          },
+          "mark_forwarded": false,
+          "route_times": 1,
+          "transformer": null,
+          "agent_state_update": null,
+          "guild_state_update": null,
+          "process_status": "completed"
+        }
+      ]
+    }
+  }
+}
