@@ -31,6 +31,7 @@ type NATSControlTransport struct {
 	js      nats.JetStreamContext
 	mu      sync.Mutex
 	streams map[string]bool
+	subs    map[string]*nats.Subscription // cached pull subscriptions per queue key
 }
 
 var _ ControlPlane = (*NATSControlTransport)(nil)
@@ -45,6 +46,7 @@ func NewNATSControlTransport(nc *nats.Conn) (*NATSControlTransport, error) {
 		nc:      nc,
 		js:      js,
 		streams: make(map[string]bool),
+		subs:    make(map[string]*nats.Subscription),
 	}
 	if err := t.ensureResponseStream(); err != nil {
 		return nil, err
@@ -126,12 +128,16 @@ func (t *NATSControlTransport) Push(ctx context.Context, queueKey string, payloa
 	return err
 }
 
-// Pop dequeues one message from a queue-key stream, blocking up to timeout.
-// Returns (nil, nil) on timeout.
-func (t *NATSControlTransport) Pop(ctx context.Context, queueKey string, timeout time.Duration) ([]byte, error) {
-	if err := t.ensureStream(queueKey); err != nil {
-		return nil, err
+// getOrCreateSub returns a cached pull subscription for the given queue key,
+// creating one if it doesn't exist or the previous one became invalid.
+func (t *NATSControlTransport) getOrCreateSub(queueKey string) (*nats.Subscription, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if sub, ok := t.subs[queueKey]; ok && sub.IsValid() {
+		return sub, nil
 	}
+
 	sub, err := t.js.PullSubscribe(
 		t.ctrlSubject(queueKey),
 		"",
@@ -140,24 +146,58 @@ func (t *NATSControlTransport) Pop(ctx context.Context, queueKey string, timeout
 	if err != nil {
 		return nil, fmt.Errorf("control: failed to create pull subscription for %q: %w", queueKey, err)
 	}
-	defer func() { _ = sub.Unsubscribe() }()
+	t.subs[queueKey] = sub
+	return sub, nil
+}
+
+// invalidateSub removes a cached subscription so the next call recreates it.
+func (t *NATSControlTransport) invalidateSub(queueKey string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if sub, ok := t.subs[queueKey]; ok {
+		_ = sub.Unsubscribe()
+		delete(t.subs, queueKey)
+	}
+}
+
+// Pop dequeues one message from a queue-key stream, blocking up to timeout.
+// Returns (nil, nil) on timeout.
+func (t *NATSControlTransport) Pop(ctx context.Context, queueKey string, timeout time.Duration) ([]byte, error) {
+	if err := t.ensureStream(queueKey); err != nil {
+		return nil, err
+	}
+
+	sub, err := t.getOrCreateSub(queueKey)
+	if err != nil {
+		return nil, err
+	}
 
 	msgs, err := sub.Fetch(1, nats.MaxWait(timeout))
 	if err == nats.ErrTimeout {
 		return nil, nil
 	}
 	if err != nil {
+		// Subscription may have gone bad; invalidate so next call recreates it.
+		t.invalidateSub(queueKey)
 		return nil, fmt.Errorf("control: pop from %q: %w", queueKey, err)
 	}
 	if len(msgs) == 0 {
 		return nil, nil
 	}
-	// AckSync blocks until the server confirms the ack, ensuring the message is
-	// removed from the WorkQueuePolicy stream before the next Pop() creates a new consumer.
 	if err := msgs[0].AckSync(); err != nil {
 		return nil, fmt.Errorf("control: ack message from %q: %w", queueKey, err)
 	}
 	return msgs[0].Data, nil
+}
+
+// Close cleans up cached pull subscriptions.
+func (t *NATSControlTransport) Close() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for key, sub := range t.subs {
+		_ = sub.Unsubscribe()
+		delete(t.subs, key)
+	}
 }
 
 // QueueDepth returns the number of pending messages in a queue-key stream.
