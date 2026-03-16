@@ -9,6 +9,8 @@ import (
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+
+	"github.com/rustic-ai/forge/forge-go/forgepath"
 )
 
 // EmbeddedNATS wraps an in-process NATS server with JetStream enabled.
@@ -25,9 +27,9 @@ func StartEmbeddedNATS() (*EmbeddedNATS, error) {
 // StartEmbeddedNATSAt spins up a new in-process NATS server on a specific address.
 // If addr is empty, an ephemeral port is used.
 func StartEmbeddedNATSAt(addr string) (*EmbeddedNATS, error) {
-	storeDir, err := os.MkdirTemp("", "forge-embedded-nats-*")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp dir for embedded NATS: %w", err)
+	storeDir := forgepath.Resolve("nats")
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create NATS store dir %s: %w", storeDir, err)
 	}
 
 	opts := &natsserver.Options{
@@ -40,12 +42,10 @@ func StartEmbeddedNATSAt(addr string) (*EmbeddedNATS, error) {
 	if addr != "" {
 		host, portStr, err := net.SplitHostPort(addr)
 		if err != nil {
-			_ = os.RemoveAll(storeDir)
 			return nil, fmt.Errorf("invalid address %q: %w", addr, err)
 		}
 		var port int
 		if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
-			_ = os.RemoveAll(storeDir)
 			return nil, fmt.Errorf("invalid port in address %q: %w", addr, err)
 		}
 		opts.Host = host
@@ -54,14 +54,12 @@ func StartEmbeddedNATSAt(addr string) (*EmbeddedNATS, error) {
 
 	s, err := natsserver.NewServer(opts)
 	if err != nil {
-		_ = os.RemoveAll(storeDir)
 		return nil, fmt.Errorf("failed to create embedded NATS server: %w", err)
 	}
 
 	go s.Start()
 
 	if !s.ReadyForConnections(5 * time.Second) {
-		_ = os.RemoveAll(storeDir)
 		return nil, fmt.Errorf("embedded NATS server did not become ready within 5s")
 	}
 
@@ -94,12 +92,10 @@ func (e *EmbeddedNATS) Client() (*nats.Conn, error) {
 	return nats.Connect(e.ClientURL())
 }
 
-// Close shuts down the embedded server and removes the JetStream store directory.
+// Close shuts down the embedded server. The JetStream store directory under
+// forge-home is preserved across restarts.
 func (e *EmbeddedNATS) Close() {
 	if e.server != nil {
 		e.server.Shutdown()
-	}
-	if e.storeDir != "" {
-		_ = os.RemoveAll(e.storeDir)
 	}
 }
