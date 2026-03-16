@@ -18,6 +18,7 @@ type ServerConfig struct {
 	ClientMemory            int
 	ClientGPUs              int
 	ClientDefaultSupervisor string
+	ClientDefaultTransport  string
 	ClientAttachProcessTree bool
 	LeaderElectionMode      string
 	RaftBindAddr            string
@@ -36,5 +37,6 @@ type ClientConfig struct {
 	NodeID            string
 	MetricsAddr       string
 	DefaultSupervisor string
+	DefaultTransport  string
 	AttachProcessTree bool
 }

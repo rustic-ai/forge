@@ -397,6 +397,7 @@ entries:
 			_ = orgID
 			return supervisor.NewDispatchingSupervisor(
 				"process",
+				"direct",
 				supervisor.NewProcessSupervisor(supervisor.NewRedisAgentStatusStore(rdb), supervisor.WithWorkDirBase(t.TempDir())),
 				nil,
 				nil,

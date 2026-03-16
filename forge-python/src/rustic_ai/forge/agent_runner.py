@@ -26,6 +26,11 @@ logging.basicConfig(
 
 logger = logging.getLogger("forge.runner")
 
+SUPERVISOR_ZMQ_BACKEND_CLASS = "SupervisorZmqMessagingBackend"
+SUPERVISOR_ZMQ_BACKEND_MODULE = "rustic_ai.forge.messaging.supervisor_backend"
+SUPERVISOR_ZMQ_ENDPOINT_ENV = "FORGE_SUPERVISOR_ZMQ_ENDPOINT"
+SUPERVISOR_ZMQ_CONFIG_ENV = "FORGE_SUPERVISOR_ZMQ_CONFIG_JSON"
+
 
 class _UnresolvedAgent(Agent):
     """
@@ -194,6 +199,33 @@ def _load_agent_spec(agent_spec_json: str) -> AgentSpec:
         return AgentSpec.model_validate_json(agent_spec_json)
 
 
+def _load_backend_config(client_props: dict, client_type_str: str) -> dict:
+    if "backend_config" in client_props:
+        raw_backend_config = client_props["backend_config"]
+    else:
+        raw_backend_config = {
+            key: value for key, value in client_props.items() if key != "organization_id"
+        }
+    if not isinstance(raw_backend_config, dict):
+        raise ValueError("FORGE_CLIENT_PROPERTIES_JSON backend_config must be a JSON object.")
+
+    backend_config = dict(raw_backend_config)
+
+    if client_type_str == SUPERVISOR_ZMQ_BACKEND_CLASS:
+        raw_supervisor_config = os.getenv(SUPERVISOR_ZMQ_CONFIG_ENV, "")
+        if raw_supervisor_config:
+            supervisor_config = json.loads(raw_supervisor_config)
+            if not isinstance(supervisor_config, dict):
+                raise ValueError(f"{SUPERVISOR_ZMQ_CONFIG_ENV} must decode to a JSON object.")
+            backend_config = supervisor_config | backend_config
+
+        endpoint = os.getenv(SUPERVISOR_ZMQ_ENDPOINT_ENV, "")
+        if endpoint and "endpoint" not in backend_config:
+            backend_config["endpoint"] = endpoint
+
+    return backend_config
+
+
 def main():
     try:
         logger.info("Starting Forge Agent Runner...")
@@ -215,8 +247,13 @@ def main():
         client_type_str = os.getenv("FORGE_CLIENT_TYPE", "InMemoryMessagingBackend")
         client_module_str = os.getenv("FORGE_CLIENT_MODULE", "")
         client_props = json.loads(os.getenv("FORGE_CLIENT_PROPERTIES_JSON", "{}"))
+        if not isinstance(client_props, dict):
+            raise ValueError("FORGE_CLIENT_PROPERTIES_JSON must decode to a JSON object.")
 
-        backend_config = client_props.get("backend_config", client_props)
+        backend_config = _load_backend_config(client_props, client_type_str)
+
+        if client_type_str == SUPERVISOR_ZMQ_BACKEND_CLASS and not client_module_str:
+            client_module_str = SUPERVISOR_ZMQ_BACKEND_MODULE
 
         if (
             client_type_str == "RedisMessagingBackend"

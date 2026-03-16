@@ -21,6 +21,7 @@ import (
 
 	"github.com/rustic-ai/forge/forge-go/control"
 	"github.com/rustic-ai/forge/forge-go/helper/logging"
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/scheduler"
 	"github.com/rustic-ai/forge/forge-go/secrets"
@@ -85,6 +86,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 
 	var controlPlane control.ControlPlane
 	var statusStore supervisor.AgentStatusStore
+	var msgBackend messaging.Backend
 	if config.NATSUrl != "" {
 		_ = os.Setenv("NATS_URL", config.NATSUrl)
 		nc, err := nats.Connect(config.NATSUrl)
@@ -100,8 +102,13 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to create NATS agent status store: %w", err)
 		}
+		natsBackend, err := messaging.NewNATSBackend(nc)
+		if err != nil {
+			return fmt.Errorf("failed to create NATS messaging backend: %w", err)
+		}
 		controlPlane = natsCP
 		statusStore = natsStatus
+		msgBackend = natsBackend
 	} else if config.RedisURL != "" {
 		rdb := redis.NewClient(&redis.Options{Addr: config.RedisURL})
 		defer rdb.Close()
@@ -110,6 +117,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		}
 		controlPlane = control.NewRedisControlTransport(rdb)
 		statusStore = supervisor.NewRedisAgentStatusStore(rdb)
+		msgBackend = messaging.NewRedisBackend(rdb)
 	} else {
 		return fmt.Errorf("either --redis or --nats URL is required for distributed client mode")
 	}
@@ -156,7 +164,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		}
 	}
 	sec := secrets.DefaultProvider()
-	supervisorFactory := buildOrgSupervisorFactory(statusStore, config.DefaultSupervisor, config.DataDir, config.AttachProcessTree)
+	supervisorFactory := buildOrgSupervisorFactory(statusStore, config.DefaultSupervisor, config.DefaultTransport, msgBackend, config.DataDir, config.AttachProcessTree)
 	nodeQueueKey := "forge:control:node:" + config.NodeID
 	queueHandler := control.NewControlQueueHandlerWithQueueFactory(controlPlane, reg, sec, supervisorFactory, nil, nodeQueueKey)
 	if err := queueHandler.Start(ctx); err != nil {

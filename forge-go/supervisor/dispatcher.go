@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/rustic-ai/forge/forge-go/helper/logging"
@@ -14,22 +15,30 @@ import (
 )
 
 type DispatchingSupervisor struct {
-	nodeDefault string
-	processSup  AgentSupervisor
-	dockerSup   AgentSupervisor
-	bwrapSup    AgentSupervisor
+	nodeDefault   string
+	nodeTransport string
+	processSup    AgentSupervisor
+	dockerSup     AgentSupervisor
+	bwrapSup      AgentSupervisor
 
 	mu        sync.RWMutex
 	ownership map[string]AgentSupervisor
 }
 
-func NewDispatchingSupervisor(nodeDefault string, process AgentSupervisor, docker AgentSupervisor, bwrap AgentSupervisor) *DispatchingSupervisor {
+func NewDispatchingSupervisor(
+	nodeDefault string,
+	nodeTransport string,
+	process AgentSupervisor,
+	docker AgentSupervisor,
+	bwrap AgentSupervisor,
+) *DispatchingSupervisor {
 	return &DispatchingSupervisor{
-		nodeDefault: nodeDefault,
-		processSup:  process,
-		dockerSup:   docker,
-		bwrapSup:    bwrap,
-		ownership:   make(map[string]AgentSupervisor),
+		nodeDefault:   nodeDefault,
+		nodeTransport: nodeTransport,
+		processSup:    process,
+		dockerSup:     docker,
+		bwrapSup:      bwrap,
+		ownership:     make(map[string]AgentSupervisor),
 	}
 }
 
@@ -84,6 +93,13 @@ func (d *DispatchingSupervisor) Launch(ctx context.Context, guildID string, agen
 	sup, err := d.selectSupervisor(entry)
 	if err != nil {
 		return err
+	}
+
+	transport := resolvedTransportFromEnv(env, d.nodeTransport)
+	if transport == protocol.AgentTransportSupervisorZMQ {
+		if _, ok := sup.(*ProcessSupervisor); !ok {
+			return fmt.Errorf("agent transport %q is only supported by the process supervisor", transport)
+		}
 	}
 
 	log.Debug("Dispatching agent launch", "agent_id", agentSpec.ID, "runtime", entry.Runtime, "supervisor", fmt.Sprintf("%T", sup))
@@ -147,4 +163,13 @@ func (d *DispatchingSupervisor) StopAll(ctx context.Context) error {
 	d.mu.Unlock()
 
 	return errors.Join(errs...)
+}
+
+func resolvedTransportFromEnv(env []string, defaultTransport string) protocol.AgentTransportMode {
+	for _, entry := range env {
+		if value, ok := strings.CutPrefix(entry, protocol.EnvForgeAgentTransport+"="); ok {
+			return protocol.NormalizeAgentTransportMode(value)
+		}
+	}
+	return protocol.NormalizeAgentTransportMode(defaultTransport)
 }

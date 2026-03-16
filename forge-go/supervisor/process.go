@@ -3,6 +3,7 @@ package supervisor
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -18,18 +19,22 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/rustic-ai/forge/forge-go/filesystem"
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/telemetry"
 )
 
 type ProcessSupervisor struct {
-	mu          sync.RWMutex
-	agents      map[string]*ManagedAgent
-	statusStore AgentStatusStore
-	workDirBase string
-	orgID       string
-	detachGroup bool
+	mu               sync.RWMutex
+	agents           map[string]*ManagedAgent
+	bridges          map[string]*AgentMessagingBridge
+	statusStore      AgentStatusStore
+	msgBackend       messaging.Backend
+	workDirBase      string
+	orgID            string
+	defaultTransport protocol.AgentTransportMode
+	detachGroup      bool
 }
 
 type ProcessSupervisorOption func(*ProcessSupervisor)
@@ -54,13 +59,27 @@ func WithAttachedProcessTree() ProcessSupervisorOption {
 	}
 }
 
+func WithDefaultAgentTransport(mode string) ProcessSupervisorOption {
+	return func(p *ProcessSupervisor) {
+		p.defaultTransport = protocol.NormalizeAgentTransportMode(mode)
+	}
+}
+
+func WithMessagingBackend(b messaging.Backend) ProcessSupervisorOption {
+	return func(p *ProcessSupervisor) {
+		p.msgBackend = b
+	}
+}
+
 func NewProcessSupervisor(statusStore AgentStatusStore, opts ...ProcessSupervisorOption) *ProcessSupervisor {
 	p := &ProcessSupervisor{
-		agents:      make(map[string]*ManagedAgent),
-		statusStore: statusStore,
-		workDirBase: resolveProcessWorkDirBase(""),
-		orgID:       "default-org",
-		detachGroup: true,
+		agents:           make(map[string]*ManagedAgent),
+		bridges:          make(map[string]*AgentMessagingBridge),
+		statusStore:      statusStore,
+		workDirBase:      resolveProcessWorkDirBase(""),
+		orgID:            "default-org",
+		defaultTransport: protocol.AgentTransportDirect,
+		detachGroup:      true,
 	}
 
 	for _, opt := range opts {
@@ -118,6 +137,30 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 	}
 
 	cmd.Dir = workDir
+	env = append([]string{}, env...)
+	if transport := transportFromEnv(env, p.defaultTransport); transport == protocol.AgentTransportSupervisorZMQ {
+		if p.msgBackend == nil {
+			agent.SetState(StateFailed)
+			agent.LastError = fmt.Errorf("supervisor-zmq transport requires a messaging backend")
+			return fmt.Errorf("supervisor-zmq transport requires a messaging backend")
+		}
+
+		bridge, err := NewAgentMessagingBridge(ctx, guildID, agent.ID, workDir, p.msgBackend)
+		if err != nil {
+			agent.SetState(StateFailed)
+			agent.LastError = err
+			return fmt.Errorf("failed to create agent messaging bridge: %w", err)
+		}
+
+		env, err = applySupervisorTransportEnv(env, bridge)
+		if err != nil {
+			bridge.Close()
+			agent.SetState(StateFailed)
+			agent.LastError = err
+			return fmt.Errorf("failed to configure supervisor transport env: %w", err)
+		}
+		p.setBridge(guildID, agent.ID, bridge)
+	}
 	cmd.Env = append(os.Environ(), env...)
 
 	propagator := otel.GetTextMapPropagator()
@@ -136,6 +179,7 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 
 	startBootTime := time.Now()
 	if err := cmd.Start(); err != nil {
+		p.stopBridge(guildID, agent.ID)
 		agent.SetState(StateFailed)
 		agent.LastError = err
 		return fmt.Errorf("failed to start agent process %s: %w", agent.ID, err)
@@ -296,6 +340,7 @@ func (p *ProcessSupervisor) monitorProcess(guildID string, agent *ManagedAgent, 
 
 	err := cmd.Wait()
 	close(done)
+	p.stopBridge(guildID, agent.ID)
 
 	agent.LastExitAt = time.Now()
 	exitCode := "1"
@@ -428,4 +473,94 @@ func (p *ProcessSupervisor) StopAll(ctx context.Context) error {
 	}
 
 	return firstErr
+}
+
+func (p *ProcessSupervisor) setBridge(guildID, agentID string, bridge *AgentMessagingBridge) {
+	key := scopedAgentKey(guildID, agentID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.bridges[key] = bridge
+}
+
+func (p *ProcessSupervisor) stopBridge(guildID, agentID string) {
+	key := scopedAgentKey(guildID, agentID)
+
+	p.mu.Lock()
+	bridge := p.bridges[key]
+	delete(p.bridges, key)
+	p.mu.Unlock()
+
+	if bridge != nil {
+		bridge.Close()
+	}
+}
+
+func transportFromEnv(env []string, defaultTransport protocol.AgentTransportMode) protocol.AgentTransportMode {
+	for _, entry := range env {
+		if value, ok := strings.CutPrefix(entry, protocol.EnvForgeAgentTransport+"="); ok {
+			return protocol.NormalizeAgentTransportMode(value)
+		}
+	}
+	return defaultTransport
+}
+
+func applySupervisorTransportEnv(env []string, bridge *AgentMessagingBridge) ([]string, error) {
+	configJSON, err := json.Marshal(map[string]interface{}{
+		"endpoint": bridge.Endpoint(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	clientProps := map[string]interface{}{}
+	if raw := lookupEnvValue(env, "FORGE_CLIENT_PROPERTIES_JSON"); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &clientProps)
+	}
+	clientProps["backend_config"] = map[string]interface{}{
+		"endpoint": bridge.Endpoint(),
+	}
+
+	clientPropsJSON, err := json.Marshal(clientProps)
+	if err != nil {
+		return nil, err
+	}
+
+	env = upsertEnv(env, protocol.EnvForgeAgentTransport, string(protocol.AgentTransportSupervisorZMQ))
+	env = upsertEnv(env, "FORGE_CLIENT_MODULE", protocol.SupervisorZMQBackendModule)
+	env = upsertEnv(env, "FORGE_CLIENT_TYPE", protocol.SupervisorZMQBackendClass)
+	env = upsertEnv(env, "FORGE_CLIENT_PROPERTIES_JSON", string(clientPropsJSON))
+	env = upsertEnv(env, protocol.EnvForgeSupervisorZMQEndpoint, bridge.Endpoint())
+	env = upsertEnv(env, protocol.EnvForgeSupervisorZMQConfigJSON, string(configJSON))
+
+	return env, nil
+}
+
+func upsertEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	updated := make([]string, 0, len(env)+1)
+	replaced := false
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			if !replaced {
+				updated = append(updated, prefix+value)
+				replaced = true
+			}
+			continue
+		}
+		updated = append(updated, entry)
+	}
+	if !replaced {
+		updated = append(updated, prefix+value)
+	}
+	return updated
+}
+
+func lookupEnvValue(env []string, key string) string {
+	prefix := key + "="
+	for i := len(env) - 1; i >= 0; i-- {
+		if strings.HasPrefix(env[i], prefix) {
+			return strings.TrimPrefix(env[i], prefix)
+		}
+	}
+	return ""
 }
