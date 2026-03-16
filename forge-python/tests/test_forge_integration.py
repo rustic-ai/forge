@@ -63,9 +63,13 @@ REPO_ROOT = _find_repo_root()
 RUSTIC_AI_CORE = Path(
     os.getenv("RUSTIC_AI_CORE", str(REPO_ROOT.parent / "rustic-ai" / "core"))
 )
+RUSTIC_AI_REDIS = Path(
+    os.getenv("RUSTIC_AI_REDIS", str(REPO_ROOT.parent / "rustic-ai" / "redis"))
+)
 FORGE_PYTHON_SRC = REPO_ROOT / "forge-python" / "src"
 
 sys.path.insert(0, str(RUSTIC_AI_CORE / "src"))
+sys.path.insert(0, str(RUSTIC_AI_REDIS / "src"))
 sys.path.insert(0, str(RUSTIC_AI_CORE / "tests"))
 sys.path.insert(0, str(FORGE_PYTHON_SRC))
 
@@ -209,7 +213,7 @@ entries:
             env["REDIS_PORT"] = str(redis_server)
             env["FORGE_AGENT_REGISTRY"] = str(reg_path)
             env["PYTHONPATH"] = (
-                f"{RUSTIC_AI_CORE / 'src'}:{RUSTIC_AI_CORE / 'tests'}:{FORGE_PYTHON_SRC}"
+                f"{RUSTIC_AI_CORE / 'src'}:{RUSTIC_AI_REDIS / 'src'}:{RUSTIC_AI_CORE / 'tests'}:{FORGE_PYTHON_SRC}"
             )
 
             forge_log = open(Path(tmpdir) / "forge.log", "w")

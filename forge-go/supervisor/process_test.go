@@ -179,19 +179,31 @@ func TestProcessSupervisorLaunchesIntoPerAgentWorkDir(t *testing.T) {
 	}()
 
 	workDir := sup.resolveAgentWorkDir(guildID, "agent-1")
+
+	var cwdContent string
 	require.Eventually(t, func() bool {
-		_, err := os.Stat(filepath.Join(workDir, "cwd.txt"))
-		return err == nil
+		data, err := os.ReadFile(filepath.Join(workDir, "cwd.txt"))
+		if err != nil {
+			return false
+		}
+		cwdContent = strings.TrimSpace(string(data))
+		return cwdContent != ""
 	}, 5*time.Second, 50*time.Millisecond)
+	require.Equal(t, filepath.Clean(workDir), filepath.Clean(cwdContent))
 
-	cwdBytes, err := os.ReadFile(filepath.Join(workDir, "cwd.txt"))
-	require.NoError(t, err)
-	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(string(cwdBytes))))
-
-	envBytes, err := os.ReadFile(filepath.Join(workDir, "env.txt"))
-	require.NoError(t, err)
-	lines := strings.Split(strings.TrimSpace(string(envBytes)), "\n")
-	require.GreaterOrEqual(t, len(lines), 6)
+	var lines []string
+	require.Eventually(t, func() bool {
+		data, err := os.ReadFile(filepath.Join(workDir, "env.txt"))
+		if err != nil {
+			return false
+		}
+		trimmed := strings.TrimSpace(string(data))
+		if trimmed == "" {
+			return false
+		}
+		lines = strings.Split(trimmed, "\n")
+		return len(lines) >= 6
+	}, 5*time.Second, 50*time.Millisecond)
 	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(lines[0])))
 	require.Equal(t, filepath.Clean(workDir), filepath.Clean(strings.TrimSpace(lines[1])))
 	require.Equal(t, filepath.Clean(filepath.Join(workDir, "tmp")), filepath.Clean(strings.TrimSpace(lines[2])))
