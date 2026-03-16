@@ -117,7 +117,13 @@ class SupervisorZmqMessagingBackend(MessagingBackend):
     def load_subscribers(self, namespace: str) -> Dict[str, Set[str]]:
         return {}
 
-    def subscribe(self, topic: str, handler: Callable[[Message], None]) -> None:
+    def subscribe(
+        self,
+        topic: str,
+        handler: Callable[[Message], None],
+        client_id: Optional[str] = None,
+        namespace: Optional[str] = None,
+    ) -> None:
         with self._handlers_lock:
             self._handlers[topic] = handler
 
@@ -129,7 +135,7 @@ class SupervisorZmqMessagingBackend(MessagingBackend):
                     self._handlers.pop(topic, None)
             raise
 
-    def unsubscribe(self, topic: str) -> None:
+    def unsubscribe(self, topic: str, client_id: Optional[str] = None) -> None:
         self._send_request("unsubscribe", {"topic": topic})
         with self._handlers_lock:
             self._handlers.pop(topic, None)

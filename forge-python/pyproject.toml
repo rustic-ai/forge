@@ -1,6 +1,6 @@
 [project]
 name = "rusticai-forge"
-version = "0.2.7"
+version = "0.2.8"
 description = "Python agent wrapper and execution engine for Forge"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"

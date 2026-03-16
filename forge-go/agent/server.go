@@ -153,6 +153,8 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 		controlPlane = natsCP
 		statusStore = natsStatus
 		_ = os.Setenv("NATS_URL", natsURL)
+		_ = os.Setenv("RUSTIC_AI_MESSAGING_MODULE", "rustic_ai.nats.messaging.backend")
+		_ = os.Setenv("RUSTIC_AI_MESSAGING_CLASS", "NATSMessagingBackend")
 		l.Info("Using NATS messaging + control plane", "nats_url", natsURL)
 	} else {
 		msgBackend = messaging.NewRedisBackend(redisClient)

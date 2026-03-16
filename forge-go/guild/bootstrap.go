@@ -164,20 +164,24 @@ func applyDefaults(spec *protocol.GuildSpec) {
 			_ = json.Unmarshal([]byte(raw), &backendConfig)
 		}
 		if backendConfig == nil {
-			redisHost := os.Getenv("REDIS_HOST")
-			if redisHost == "" {
-				redisHost = "localhost"
-			}
-			redisPort := os.Getenv("REDIS_PORT")
-			if redisPort == "" {
-				redisPort = "6379"
-			}
-			backendConfig = map[string]interface{}{
-				"redis_client": map[string]interface{}{
-					"host": redisHost,
-					"port": redisPort,
-					"db":   0,
-				},
+			if backendClass == "NATSMessagingBackend" {
+				backendConfig = map[string]interface{}{}
+			} else {
+				redisHost := os.Getenv("REDIS_HOST")
+				if redisHost == "" {
+					redisHost = "localhost"
+				}
+				redisPort := os.Getenv("REDIS_PORT")
+				if redisPort == "" {
+					redisPort = "6379"
+				}
+				backendConfig = map[string]interface{}{
+					"redis_client": map[string]interface{}{
+						"host": redisHost,
+						"port": redisPort,
+						"db":   0,
+					},
+				}
 			}
 		}
 		spec.Properties["messaging"] = map[string]interface{}{
