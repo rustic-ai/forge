@@ -20,6 +20,8 @@ var (
 	clientNodeID            string
 	clientMetricsAddr       string
 	clientDefaultSupervisor string
+	clientDefaultTransport  string
+	clientZMQBridgeMode     string
 )
 
 func init() {
@@ -33,6 +35,8 @@ func init() {
 	ClientCmd.Flags().StringVar(&clientNodeID, "node-id", "", "Unique node identifier (default: hostname)")
 	ClientCmd.Flags().StringVar(&clientMetricsAddr, "metrics-addr", ":9091", "Address to bind the metrics HTTP server")
 	ClientCmd.Flags().StringVar(&clientDefaultSupervisor, "default-supervisor", "", "Force a specific supervisor (docker, bwrap) for all agents on this node")
+	ClientCmd.Flags().StringVar(&clientDefaultTransport, "default-agent-transport", "direct", `Default local agent dataplane transport (direct, supervisor-zmq)`)
+	ClientCmd.Flags().StringVar(&clientZMQBridgeMode, "zmq-bridge-mode", "ipc", `ZMQ bridge transport for non-process supervisors: "ipc" or "tcp"`)
 
 	RootCmd.AddCommand(ClientCmd)
 }
@@ -66,6 +70,8 @@ var ClientCmd = &cobra.Command{
 			NodeID:            clientNodeID,
 			MetricsAddr:       clientMetricsAddr,
 			DefaultSupervisor: clientDefaultSupervisor,
+			DefaultTransport:  clientDefaultTransport,
+			ZMQBridgeMode:     clientZMQBridgeMode,
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())

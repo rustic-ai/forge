@@ -6,13 +6,32 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
 )
 
 type BubblewrapSupervisor struct{}
 
-func NewBubblewrapSupervisor(statusStore AgentStatusStore) *BubblewrapSupervisor {
+// BubblewrapSupervisorOption configures a BubblewrapSupervisor (no-op on Windows).
+type BubblewrapSupervisorOption func(*BubblewrapSupervisor)
+
+// WithBubblewrapDefaultTransport is a no-op on Windows.
+func WithBubblewrapDefaultTransport(mode string) BubblewrapSupervisorOption {
+	return func(*BubblewrapSupervisor) {}
+}
+
+// WithBubblewrapMessagingBackend is a no-op on Windows.
+func WithBubblewrapMessagingBackend(backend messaging.Backend) BubblewrapSupervisorOption {
+	return func(*BubblewrapSupervisor) {}
+}
+
+// WithBubblewrapZMQBridgeMode is a no-op on Windows.
+func WithBubblewrapZMQBridgeMode(mode BridgeTransportMode) BubblewrapSupervisorOption {
+	return func(*BubblewrapSupervisor) {}
+}
+
+func NewBubblewrapSupervisor(statusStore AgentStatusStore, opts ...BubblewrapSupervisorOption) *BubblewrapSupervisor {
 	return &BubblewrapSupervisor{}
 }
 

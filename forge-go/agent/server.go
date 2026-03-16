@@ -320,6 +320,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 			MetricsAddr:       clientMetricsAddr,
 			DefaultSupervisor: cfg.ClientDefaultSupervisor,
 			DefaultTransport:  cfg.ClientDefaultTransport,
+			ZMQBridgeMode:     cfg.ClientZMQBridgeMode,
 			AttachProcessTree: cfg.ClientAttachProcessTree,
 		}
 		l.Info("In-process Forge client enabled",

@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/telemetry"
@@ -50,13 +51,41 @@ func (a *DockerAgent) IsStopRequested() bool {
 }
 
 type DockerSupervisor struct {
-	cli         *client.Client
-	statusStore AgentStatusStore
-	managed     map[string]*DockerAgent
-	mu          sync.RWMutex
+	cli              *client.Client
+	statusStore      AgentStatusStore
+	managed          map[string]*DockerAgent
+	bridges          map[string]*AgentMessagingBridge
+	mu               sync.RWMutex
+	msgBackend       messaging.Backend
+	defaultTransport protocol.AgentTransportMode
+	zmqBridgeMode    BridgeTransportMode
 }
 
-func NewDockerSupervisor(statusStore AgentStatusStore) (*DockerSupervisor, error) {
+// DockerSupervisorOption configures a DockerSupervisor.
+type DockerSupervisorOption func(*DockerSupervisor)
+
+// WithDockerDefaultTransport sets the default agent transport mode.
+func WithDockerDefaultTransport(mode string) DockerSupervisorOption {
+	return func(d *DockerSupervisor) {
+		d.defaultTransport = protocol.NormalizeAgentTransportMode(mode)
+	}
+}
+
+// WithDockerMessagingBackend sets the messaging backend used for ZMQ bridges.
+func WithDockerMessagingBackend(backend messaging.Backend) DockerSupervisorOption {
+	return func(d *DockerSupervisor) {
+		d.msgBackend = backend
+	}
+}
+
+// WithDockerZMQBridgeMode sets whether ZMQ bridges use IPC or TCP.
+func WithDockerZMQBridgeMode(mode BridgeTransportMode) DockerSupervisorOption {
+	return func(d *DockerSupervisor) {
+		d.zmqBridgeMode = mode
+	}
+}
+
+func NewDockerSupervisor(statusStore AgentStatusStore, opts ...DockerSupervisorOption) (*DockerSupervisor, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithVersion("1.44"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
@@ -69,11 +98,20 @@ func NewDockerSupervisor(statusStore AgentStatusStore) (*DockerSupervisor, error
 		return nil, fmt.Errorf("docker daemon is unreachable: %w", err)
 	}
 
-	return &DockerSupervisor{
-		cli:         cli,
-		statusStore: statusStore,
-		managed:     make(map[string]*DockerAgent),
-	}, nil
+	d := &DockerSupervisor{
+		cli:              cli,
+		statusStore:      statusStore,
+		managed:          make(map[string]*DockerAgent),
+		bridges:          make(map[string]*AgentMessagingBridge),
+		defaultTransport: protocol.AgentTransportDirect,
+		zmqBridgeMode:    BridgeTransportIPC,
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(d)
+		}
+	}
+	return d, nil
 }
 
 func (d *DockerSupervisor) Available() bool {
@@ -205,15 +243,53 @@ func (d *DockerSupervisor) Launch(ctx context.Context, guildID string, agentSpec
 		}
 	}
 
+	// Create ZMQ bridge when transport requires it.
+	var bridge *AgentMessagingBridge
+	transport := transportFromEnv(env, d.defaultTransport)
+	if transport == protocol.AgentTransportSupervisorZMQ {
+		if d.msgBackend == nil {
+			return fmt.Errorf("supervisor-zmq transport requires a messaging backend")
+		}
+
+		var bridgeErr error
+		bridge, bridgeErr = NewAgentMessagingBridgeWithMode(ctx, guildID, agentSpec.ID, "", d.msgBackend, d.zmqBridgeMode)
+		if bridgeErr != nil {
+			return fmt.Errorf("failed to create agent messaging bridge: %w", bridgeErr)
+		}
+
+		env, err = applySupervisorTransportEnv(env, bridge)
+		if err != nil {
+			bridge.Close()
+			return fmt.Errorf("failed to configure supervisor transport env: %w", err)
+		}
+	}
+
 	containerCfg, hostCfg := BuildContainerConfig(agentSpec, entry, guildID, imageRef, cmd, env)
+
+	// Adjust container config for bridge connectivity.
+	if bridge != nil {
+		if bridge.Mode() == BridgeTransportIPC {
+			// Volume-mount the socket file into the container.
+			hostCfg.Binds = append(hostCfg.Binds, fmt.Sprintf("%s:%s:rw", bridge.SocketPath(), bridge.SocketPath()))
+		} else if bridge.Mode() == BridgeTransportTCP && hostCfg.NetworkMode == "none" {
+			// TCP bridge requires host network for loopback access.
+			hostCfg.NetworkMode = "host"
+		}
+	}
 
 	resp, err := d.cli.ContainerCreate(ctx, containerCfg, hostCfg, nil, nil, "")
 	if err != nil {
+		if bridge != nil {
+			bridge.Close()
+		}
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
 	startBootTime := time.Now()
 	if err := d.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		if bridge != nil {
+			bridge.Close()
+		}
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 	telemetry.SupervisorBootDuration.WithLabelValues("local-node", "docker").Observe(time.Since(startBootTime).Seconds())
@@ -229,6 +305,10 @@ func (d *DockerSupervisor) Launch(ctx context.Context, guildID string, agentSpec
 	}
 	d.managed[key] = agent
 	d.mu.Unlock()
+
+	if bridge != nil {
+		d.setBridge(guildID, agentSpec.ID, bridge)
+	}
 
 	if d.statusStore != nil {
 		_ = d.statusStore.WriteStatus(ctx, normalizeGuildID(guildID), agentSpec.ID, &AgentStatusJSON{State: "running", NodeID: "local-docker", PID: -1, Timestamp: time.Now()}, 30*time.Second)
@@ -260,6 +340,8 @@ func (d *DockerSupervisor) monitorContainer(ctx context.Context, guildID string,
 		logger.Error("container wait failed", "error", err)
 		telemetry.AgentExitCodes.WithLabelValues(guildID, agent.ID, "local-docker", "error").Inc()
 	}
+
+	d.stopBridge(guildID, agent.ID)
 
 	if agent.IsStopRequested() {
 		d.mu.Lock()
@@ -351,14 +433,43 @@ func (d *DockerSupervisor) relaunchContainer(ctx context.Context, guildID string
 		}
 	}
 
+	// Recreate bridge for the new container when transport is supervisor-zmq.
+	var bridge *AgentMessagingBridge
+	transport := transportFromEnv(env, d.defaultTransport)
+	if transport == protocol.AgentTransportSupervisorZMQ && d.msgBackend != nil {
+		bridge, err = NewAgentMessagingBridgeWithMode(ctx, guildID, agent.ID, "", d.msgBackend, d.zmqBridgeMode)
+		if err != nil {
+			return fmt.Errorf("failed to create agent messaging bridge: %w", err)
+		}
+		env, err = applySupervisorTransportEnv(env, bridge)
+		if err != nil {
+			bridge.Close()
+			return fmt.Errorf("failed to configure supervisor transport env: %w", err)
+		}
+	}
+
 	containerCfg, hostCfg := BuildContainerConfig(agentSpec, entry, guildID, imageRef, cmd, env)
+
+	if bridge != nil {
+		if bridge.Mode() == BridgeTransportIPC {
+			hostCfg.Binds = append(hostCfg.Binds, fmt.Sprintf("%s:%s:rw", bridge.SocketPath(), bridge.SocketPath()))
+		} else if bridge.Mode() == BridgeTransportTCP && hostCfg.NetworkMode == "none" {
+			hostCfg.NetworkMode = "host"
+		}
+	}
 
 	resp, err := d.cli.ContainerCreate(ctx, containerCfg, hostCfg, nil, nil, "")
 	if err != nil {
+		if bridge != nil {
+			bridge.Close()
+		}
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
 	if err := d.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		if bridge != nil {
+			bridge.Close()
+		}
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -367,6 +478,10 @@ func (d *DockerSupervisor) relaunchContainer(ctx context.Context, guildID string
 	agent.State = StateRunning
 	agent.StartedAt = time.Now()
 	d.mu.Unlock()
+
+	if bridge != nil {
+		d.setBridge(guildID, agent.ID, bridge)
+	}
 
 	if d.statusStore != nil {
 		_ = d.statusStore.WriteStatus(ctx, guildID, agent.ID, &AgentStatusJSON{State: "running", NodeID: "local-docker", PID: -1, Timestamp: time.Now()}, 30*time.Second)
@@ -475,6 +590,8 @@ func (d *DockerSupervisor) Stop(ctx context.Context, guildID, agentID string) er
 
 	_ = d.cli.ContainerRemove(ctx, agent.ContainerID, container.RemoveOptions{Force: true})
 
+	d.stopBridge(guildID, agentID)
+
 	d.mu.Lock()
 	agent.State = StateStopped
 	d.mu.Unlock()
@@ -514,4 +631,22 @@ func (d *DockerSupervisor) StopAll(ctx context.Context) error {
 		}
 	}
 	return lastErr
+}
+
+func (d *DockerSupervisor) setBridge(guildID, agentID string, bridge *AgentMessagingBridge) {
+	key := scopedAgentKey(guildID, agentID)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.bridges[key] = bridge
+}
+
+func (d *DockerSupervisor) stopBridge(guildID, agentID string) {
+	key := scopedAgentKey(guildID, agentID)
+	d.mu.Lock()
+	bridge := d.bridges[key]
+	delete(d.bridges, key)
+	d.mu.Unlock()
+	if bridge != nil {
+		bridge.Close()
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,26 @@ import (
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 )
+
+// BridgeTransportMode controls whether the ZMQ bridge uses IPC (unix domain
+// socket) or TCP (loopback) for communication with the agent process.
+type BridgeTransportMode string
+
+const (
+	BridgeTransportIPC BridgeTransportMode = "ipc"
+	BridgeTransportTCP BridgeTransportMode = "tcp"
+)
+
+// NormalizeBridgeTransportMode returns the canonical BridgeTransportMode for
+// the given string. Unknown values default to BridgeTransportIPC.
+func NormalizeBridgeTransportMode(s string) BridgeTransportMode {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "tcp":
+		return BridgeTransportTCP
+	default:
+		return BridgeTransportIPC
+	}
+}
 
 type bridgeEnvelope struct {
 	Kind             string            `json:"kind"`
@@ -46,8 +67,10 @@ type AgentMessagingBridge struct {
 	closeOnce  sync.Once
 	wg         sync.WaitGroup
 	socketPath string
+	mode       BridgeTransportMode
 }
 
+// NewAgentMessagingBridge creates a bridge using IPC mode (backward-compatible).
 func NewAgentMessagingBridge(
 	parent context.Context,
 	guildID string,
@@ -55,25 +78,55 @@ func NewAgentMessagingBridge(
 	workDir string,
 	msgBackend messaging.Backend,
 ) (*AgentMessagingBridge, error) {
+	return NewAgentMessagingBridgeWithMode(parent, guildID, agentID, workDir, msgBackend, BridgeTransportIPC)
+}
+
+// NewAgentMessagingBridgeWithMode creates a bridge using the specified transport mode.
+func NewAgentMessagingBridgeWithMode(
+	parent context.Context,
+	guildID string,
+	agentID string,
+	workDir string,
+	msgBackend messaging.Backend,
+	mode BridgeTransportMode,
+) (*AgentMessagingBridge, error) {
 	if msgBackend == nil {
 		return nil, fmt.Errorf("messaging backend is required")
 	}
 
 	ctx, cancel := context.WithCancel(parent)
-	socketDir := filepath.Join(os.TempDir(), "forge-zmq")
-	if err := os.MkdirAll(socketDir, 0o700); err != nil {
-		cancel()
-		return nil, fmt.Errorf("create bridge socket dir: %w", err)
+
+	var endpoint, socketPath string
+	switch mode {
+	case BridgeTransportTCP:
+		// Grab an ephemeral port, then release it so ZMQ can bind.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			cancel()
+			return nil, fmt.Errorf("allocate ephemeral port for bridge: %w", err)
+		}
+		addr := ln.Addr().String()
+		_ = ln.Close()
+		endpoint = "tcp://" + addr
+
+	default: // IPC
+		mode = BridgeTransportIPC
+		socketDir := filepath.Join(os.TempDir(), "forge-zmq")
+		if err := os.MkdirAll(socketDir, 0o700); err != nil {
+			cancel()
+			return nil, fmt.Errorf("create bridge socket dir: %w", err)
+		}
+		socketPath = bridgeSocketPath(socketDir, guildID, agentID, workDir)
+		_ = os.Remove(socketPath)
+		endpoint = "ipc://" + socketPath
 	}
 
-	socketPath := bridgeSocketPath(socketDir, guildID, agentID, workDir)
-	_ = os.Remove(socketPath)
-
-	endpoint := "ipc://" + socketPath
 	sock := zmq4.NewPair(ctx, zmq4.WithAutomaticReconnect(true))
 	if err := sock.Listen(endpoint); err != nil {
 		cancel()
-		_ = os.Remove(socketPath)
+		if socketPath != "" {
+			_ = os.Remove(socketPath)
+		}
 		return nil, fmt.Errorf("listen on %s: %w", endpoint, err)
 	}
 
@@ -85,6 +138,7 @@ func NewAgentMessagingBridge(
 		msgBackend: msgBackend,
 		subs:       make(map[string]messaging.Subscription),
 		socketPath: socketPath,
+		mode:       mode,
 	}
 
 	bridge.wg.Add(1)
@@ -106,13 +160,25 @@ func (b *AgentMessagingBridge) Endpoint() string {
 	return b.endpoint
 }
 
+// SocketPath returns the IPC socket file path, or empty string for TCP mode.
+func (b *AgentMessagingBridge) SocketPath() string {
+	return b.socketPath
+}
+
+// Mode returns the transport mode used by this bridge.
+func (b *AgentMessagingBridge) Mode() BridgeTransportMode {
+	return b.mode
+}
+
 func (b *AgentMessagingBridge) Close() {
 	b.closeOnce.Do(func() {
 		b.cancel()
 		b.closeSubscriptions()
 		_ = b.sock.Close()
 		b.wg.Wait()
-		_ = os.Remove(b.socketPath)
+		if b.socketPath != "" {
+			_ = os.Remove(b.socketPath)
+		}
 	})
 }
 

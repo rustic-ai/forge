@@ -19,6 +19,7 @@ type ServerConfig struct {
 	ClientGPUs              int
 	ClientDefaultSupervisor string
 	ClientDefaultTransport  string
+	ClientZMQBridgeMode     string
 	ClientAttachProcessTree bool
 	LeaderElectionMode      string
 	RaftBindAddr            string
@@ -38,5 +39,6 @@ type ClientConfig struct {
 	MetricsAddr       string
 	DefaultSupervisor string
 	DefaultTransport  string
+	ZMQBridgeMode     string
 	AttachProcessTree bool
 }

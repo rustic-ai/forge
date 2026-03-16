@@ -26,9 +26,10 @@ var (
 	serverClientGPUs       int
 	serverClientSupervisor string
 	serverClientTransport  string
-	serverClientAttachTree bool
-	serverBackend          string
-	serverEmbeddedNATSAddr string
+	serverClientAttachTree    bool
+	serverClientZMQBridgeMode string
+	serverBackend             string
+	serverEmbeddedNATSAddr    string
 )
 
 func init() {
@@ -49,6 +50,7 @@ func init() {
 	ServerCmd.Flags().StringVar(&serverClientSupervisor, "client-default-supervisor", "", "Default supervisor for in-process client (docker, bwrap)")
 	ServerCmd.Flags().StringVar(&serverClientTransport, "client-default-agent-transport", "direct", `Default local agent dataplane transport for the in-process client (direct, supervisor-zmq)`)
 	ServerCmd.Flags().BoolVar(&serverClientAttachTree, "client-attach-process-tree", false, "When used with --with-client and process supervisor, launch agent processes in the server process tree so they exit with the server")
+	ServerCmd.Flags().StringVar(&serverClientZMQBridgeMode, "client-zmq-bridge-mode", "ipc", `ZMQ bridge transport for non-process supervisors: "ipc" or "tcp"`)
 	ServerCmd.Flags().StringVar(&serverBackend, "backend", "redis", `Messaging backend: "redis" or "nats"`)
 	ServerCmd.Flags().StringVar(&serverEmbeddedNATSAddr, "embedded-nats-addr", "", "Bind address for embedded NATS (default: ephemeral port)")
 
@@ -83,6 +85,7 @@ var ServerCmd = &cobra.Command{
 			ClientGPUs:              serverClientGPUs,
 			ClientDefaultSupervisor: serverClientSupervisor,
 			ClientDefaultTransport:  serverClientTransport,
+			ClientZMQBridgeMode:     serverClientZMQBridgeMode,
 			ClientAttachProcessTree: serverClientAttachTree,
 		}
 

@@ -53,7 +53,7 @@ func loadDispatcherTestRegistry(t *testing.T, content string) *registry.Registry
 	return reg
 }
 
-func TestDispatchingSupervisorRejectsSupervisorZMQForNonProcessRuntime(t *testing.T) {
+func TestDispatchingSupervisorAllowsSupervisorZMQForNonProcessRuntime(t *testing.T) {
 	reg := loadDispatcherTestRegistry(t, `
 entries:
   - id: TestAgent
@@ -72,6 +72,6 @@ entries:
 		reg,
 		[]string{protocol.EnvForgeAgentTransport + "=" + string(protocol.AgentTransportSupervisorZMQ)},
 	)
-	require.ErrorContains(t, err, `agent transport "supervisor-zmq" is only supported by the process supervisor`)
-	require.False(t, dockerSup.launched)
+	require.NoError(t, err)
+	require.True(t, dockerSup.launched)
 }

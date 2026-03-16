@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -17,22 +18,60 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/telemetry"
 )
 
 type BubblewrapSupervisor struct {
-	mu          sync.RWMutex
-	agents      map[string]*ManagedAgent
-	statusStore AgentStatusStore
+	mu               sync.RWMutex
+	agents           map[string]*ManagedAgent
+	bridges          map[string]*AgentMessagingBridge
+	statusStore      AgentStatusStore
+	msgBackend       messaging.Backend
+	defaultTransport protocol.AgentTransportMode
+	zmqBridgeMode    BridgeTransportMode
 }
 
-func NewBubblewrapSupervisor(statusStore AgentStatusStore) *BubblewrapSupervisor {
-	return &BubblewrapSupervisor{
-		agents:      make(map[string]*ManagedAgent),
-		statusStore: statusStore,
+// BubblewrapSupervisorOption configures a BubblewrapSupervisor.
+type BubblewrapSupervisorOption func(*BubblewrapSupervisor)
+
+// WithBubblewrapDefaultTransport sets the default agent transport mode.
+func WithBubblewrapDefaultTransport(mode string) BubblewrapSupervisorOption {
+	return func(b *BubblewrapSupervisor) {
+		b.defaultTransport = protocol.NormalizeAgentTransportMode(mode)
 	}
+}
+
+// WithBubblewrapMessagingBackend sets the messaging backend used for ZMQ bridges.
+func WithBubblewrapMessagingBackend(backend messaging.Backend) BubblewrapSupervisorOption {
+	return func(b *BubblewrapSupervisor) {
+		b.msgBackend = backend
+	}
+}
+
+// WithBubblewrapZMQBridgeMode sets whether ZMQ bridges use IPC or TCP.
+func WithBubblewrapZMQBridgeMode(mode BridgeTransportMode) BubblewrapSupervisorOption {
+	return func(b *BubblewrapSupervisor) {
+		b.zmqBridgeMode = mode
+	}
+}
+
+func NewBubblewrapSupervisor(statusStore AgentStatusStore, opts ...BubblewrapSupervisorOption) *BubblewrapSupervisor {
+	b := &BubblewrapSupervisor{
+		agents:           make(map[string]*ManagedAgent),
+		bridges:          make(map[string]*AgentMessagingBridge),
+		statusStore:      statusStore,
+		defaultTransport: protocol.AgentTransportDirect,
+		zmqBridgeMode:    BridgeTransportIPC,
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(b)
+		}
+	}
+	return b
 }
 
 func (p *BubblewrapSupervisor) Available() bool {
@@ -68,12 +107,46 @@ func (p *BubblewrapSupervisor) Launch(ctx context.Context, guildID string, agent
 		return fmt.Errorf("runtimeCmd is empty")
 	}
 
-	bwrapArgs := p.buildBwrapArgs(entry, runtimeCmd)
+	// Create ZMQ bridge when transport requires it.
+	var bridge *AgentMessagingBridge
+	transport := transportFromEnv(env, p.defaultTransport)
+	if transport == protocol.AgentTransportSupervisorZMQ {
+		if p.msgBackend == nil {
+			agent.SetState(StateFailed)
+			return fmt.Errorf("supervisor-zmq transport requires a messaging backend")
+		}
 
-	return p.startProcess(ctx, guildID, agent, agentSpec, bwrapArgs, env)
+		bridge, err = NewAgentMessagingBridgeWithMode(ctx, guildID, agentSpec.ID, "", p.msgBackend, p.zmqBridgeMode)
+		if err != nil {
+			agent.SetState(StateFailed)
+			return fmt.Errorf("failed to create agent messaging bridge: %w", err)
+		}
+
+		env, err = applySupervisorTransportEnv(env, bridge)
+		if err != nil {
+			bridge.Close()
+			agent.SetState(StateFailed)
+			return fmt.Errorf("failed to configure supervisor transport env: %w", err)
+		}
+	}
+
+	bwrapArgs := p.buildBwrapArgs(entry, runtimeCmd, bridge)
+
+	if err := p.startProcess(ctx, guildID, agent, agentSpec, bwrapArgs, env); err != nil {
+		if bridge != nil {
+			bridge.Close()
+		}
+		return err
+	}
+
+	if bridge != nil {
+		p.setBridge(guildID, agentSpec.ID, bridge)
+	}
+
+	return nil
 }
 
-func (p *BubblewrapSupervisor) buildBwrapArgs(entry *registry.AgentRegistryEntry, cmd []string) []string {
+func (p *BubblewrapSupervisor) buildBwrapArgs(entry *registry.AgentRegistryEntry, cmd []string, bridge *AgentMessagingBridge) []string {
 	var args []string
 
 	args = append(args,
@@ -85,7 +158,14 @@ func (p *BubblewrapSupervisor) buildBwrapArgs(entry *registry.AgentRegistryEntry
 		"--die-with-parent",
 	)
 
-	if len(entry.Network) > 0 && !containsString(entry.Network, "none") {
+	needsNetwork := len(entry.Network) > 0 && !containsString(entry.Network, "none")
+
+	// TCP bridge requires loopback access.
+	if bridge != nil && bridge.Mode() == BridgeTransportTCP {
+		needsNetwork = true
+	}
+
+	if needsNetwork {
 		args = append(args, "--share-net")
 	}
 
@@ -95,6 +175,13 @@ func (p *BubblewrapSupervisor) buildBwrapArgs(entry *registry.AgentRegistryEntry
 		} else {
 			args = append(args, "--ro-bind", fs.Path, fs.Path)
 		}
+	}
+
+	// IPC bridge: bind-mount the socket directory into the sandbox.
+	// This must come after --tmpfs /tmp so it overlays correctly.
+	if bridge != nil && bridge.Mode() == BridgeTransportIPC {
+		socketDir := filepath.Dir(bridge.SocketPath())
+		args = append(args, "--bind", socketDir, socketDir)
 	}
 
 	homeDir, _ := os.UserHomeDir()
@@ -219,6 +306,7 @@ func (p *BubblewrapSupervisor) monitorProcess(guildID string, agent *ManagedAgen
 
 	err := cmd.Wait()
 	close(done)
+	p.stopBridge(guildID, agent.ID)
 
 	agent.LastExitAt = time.Now()
 	exitCode := "1"
@@ -383,6 +471,24 @@ func (p *BubblewrapSupervisor) StopAll(ctx context.Context) error {
 	}
 
 	return firstErr
+}
+
+func (p *BubblewrapSupervisor) setBridge(guildID, agentID string, bridge *AgentMessagingBridge) {
+	key := scopedAgentKey(guildID, agentID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.bridges[key] = bridge
+}
+
+func (p *BubblewrapSupervisor) stopBridge(guildID, agentID string) {
+	key := scopedAgentKey(guildID, agentID)
+	p.mu.Lock()
+	bridge := p.bridges[key]
+	delete(p.bridges, key)
+	p.mu.Unlock()
+	if bridge != nil {
+		bridge.Close()
+	}
 }
 
 func containsString(ss []string, target string) bool {

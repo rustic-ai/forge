@@ -1,9 +1,11 @@
 package supervisor
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -97,3 +99,70 @@ func TestResolvedTransportFromEnv(t *testing.T) {
 		resolvedTransportFromEnv(nil, "direct"),
 	)
 }
+
+func TestNormalizeBridgeTransportMode(t *testing.T) {
+	require.Equal(t, BridgeTransportIPC, NormalizeBridgeTransportMode("ipc"))
+	require.Equal(t, BridgeTransportIPC, NormalizeBridgeTransportMode("IPC"))
+	require.Equal(t, BridgeTransportIPC, NormalizeBridgeTransportMode(""))
+	require.Equal(t, BridgeTransportIPC, NormalizeBridgeTransportMode("unknown"))
+	require.Equal(t, BridgeTransportTCP, NormalizeBridgeTransportMode("tcp"))
+	require.Equal(t, BridgeTransportTCP, NormalizeBridgeTransportMode("TCP"))
+	require.Equal(t, BridgeTransportTCP, NormalizeBridgeTransportMode("  tcp  "))
+}
+
+func TestNewAgentMessagingBridgeWithMode_TCP(t *testing.T) {
+	// TCP mode should produce a tcp:// endpoint and empty SocketPath.
+	// We need a messaging backend stub for bridge creation.
+	bridge, err := NewAgentMessagingBridgeWithMode(
+		t.Context(),
+		"guild-1",
+		"agent-1",
+		"/tmp/test-workdir",
+		&stubMessagingBackend{},
+		BridgeTransportTCP,
+	)
+	require.NoError(t, err)
+	defer bridge.Close()
+
+	require.Equal(t, BridgeTransportTCP, bridge.Mode())
+	require.Empty(t, bridge.SocketPath())
+	require.True(t, len(bridge.Endpoint()) > 0)
+	require.Contains(t, bridge.Endpoint(), "tcp://127.0.0.1:")
+}
+
+func TestNewAgentMessagingBridgeWithMode_IPC(t *testing.T) {
+	bridge, err := NewAgentMessagingBridgeWithMode(
+		t.Context(),
+		"guild-1",
+		"agent-1",
+		"/tmp/test-workdir",
+		&stubMessagingBackend{},
+		BridgeTransportIPC,
+	)
+	require.NoError(t, err)
+	defer bridge.Close()
+
+	require.Equal(t, BridgeTransportIPC, bridge.Mode())
+	require.NotEmpty(t, bridge.SocketPath())
+	require.Contains(t, bridge.Endpoint(), "ipc://")
+}
+
+// stubMessagingBackend is a minimal stub for bridge creation tests.
+type stubMessagingBackend struct{}
+
+func (s *stubMessagingBackend) PublishMessage(_ context.Context, _, _ string, _ *protocol.Message) error {
+	return nil
+}
+func (s *stubMessagingBackend) GetMessagesForTopic(_ context.Context, _, _ string) ([]protocol.Message, error) {
+	return nil, nil
+}
+func (s *stubMessagingBackend) GetMessagesSince(_ context.Context, _, _ string, _ uint64) ([]protocol.Message, error) {
+	return nil, nil
+}
+func (s *stubMessagingBackend) GetMessagesByID(_ context.Context, _ string, _ []uint64) ([]protocol.Message, error) {
+	return nil, nil
+}
+func (s *stubMessagingBackend) Subscribe(_ context.Context, _ string, _ ...string) (messaging.Subscription, error) {
+	return nil, nil
+}
+func (s *stubMessagingBackend) Close() error { return nil }

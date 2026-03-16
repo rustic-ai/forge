@@ -13,7 +13,10 @@ func buildOrgSupervisorFactory(
 	msgBackend messaging.Backend,
 	dataDir string,
 	attachProcessTree bool,
+	zmqBridgeMode string,
 ) control.SupervisorFactory {
+	bridgeMode := supervisor.NormalizeBridgeTransportMode(zmqBridgeMode)
+
 	return func(orgID string) supervisor.AgentSupervisor {
 		opts := []supervisor.ProcessSupervisorOption{
 			supervisor.WithOrganizationID(orgID),
@@ -27,12 +30,20 @@ func buildOrgSupervisorFactory(
 		processSup := supervisor.NewProcessSupervisor(statusStore, opts...)
 
 		var dockerSup *supervisor.DockerSupervisor
-		if ds, err := supervisor.NewDockerSupervisor(statusStore); err == nil && ds.Available() {
+		if ds, err := supervisor.NewDockerSupervisor(statusStore,
+			supervisor.WithDockerDefaultTransport(defaultTransport),
+			supervisor.WithDockerMessagingBackend(msgBackend),
+			supervisor.WithDockerZMQBridgeMode(bridgeMode),
+		); err == nil && ds.Available() {
 			dockerSup = ds
 		}
 
 		var bwrapSup *supervisor.BubblewrapSupervisor
-		bs := supervisor.NewBubblewrapSupervisor(statusStore)
+		bs := supervisor.NewBubblewrapSupervisor(statusStore,
+			supervisor.WithBubblewrapDefaultTransport(defaultTransport),
+			supervisor.WithBubblewrapMessagingBackend(msgBackend),
+			supervisor.WithBubblewrapZMQBridgeMode(bridgeMode),
+		)
 		if bs.Available() {
 			bwrapSup = bs
 		}

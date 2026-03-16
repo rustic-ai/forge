@@ -164,7 +164,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		}
 	}
 	sec := secrets.DefaultProvider()
-	supervisorFactory := buildOrgSupervisorFactory(statusStore, config.DefaultSupervisor, config.DefaultTransport, msgBackend, config.DataDir, config.AttachProcessTree)
+	supervisorFactory := buildOrgSupervisorFactory(statusStore, config.DefaultSupervisor, config.DefaultTransport, msgBackend, config.DataDir, config.AttachProcessTree, config.ZMQBridgeMode)
 	nodeQueueKey := "forge:control:node:" + config.NodeID
 	queueHandler := control.NewControlQueueHandlerWithQueueFactory(controlPlane, reg, sec, supervisorFactory, nil, nodeQueueKey)
 	if err := queueHandler.Start(ctx); err != nil {

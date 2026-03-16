@@ -95,13 +95,6 @@ func (d *DispatchingSupervisor) Launch(ctx context.Context, guildID string, agen
 		return err
 	}
 
-	transport := resolvedTransportFromEnv(env, d.nodeTransport)
-	if transport == protocol.AgentTransportSupervisorZMQ {
-		if _, ok := sup.(*ProcessSupervisor); !ok {
-			return fmt.Errorf("agent transport %q is only supported by the process supervisor", transport)
-		}
-	}
-
 	log.Debug("Dispatching agent launch", "agent_id", agentSpec.ID, "runtime", entry.Runtime, "supervisor", fmt.Sprintf("%T", sup))
 
 	if err := sup.Launch(ctx, guildID, agentSpec, reg, env); err != nil {
