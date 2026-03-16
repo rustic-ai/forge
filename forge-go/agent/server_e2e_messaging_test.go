@@ -132,7 +132,7 @@ func TestStartServer_NATSBackend_MessagingPublishAndRetrieve(t *testing.T) {
 	// Create a parallel NATS backend pointing at the same in-process NATS server.
 	nc, err := nats.Connect(ns.ClientURL())
 	require.NoError(t, err)
-	defer nc.Drain()
+	defer func() { _ = nc.Drain() }()
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)

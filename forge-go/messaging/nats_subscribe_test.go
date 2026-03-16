@@ -19,7 +19,7 @@ func TestNATSSubscriptionDelivery(t *testing.T) {
 
 	nc, err := nats.Connect(s.ClientURL())
 	require.NoError(t, err)
-	defer nc.Drain()
+	defer func() { _ = nc.Drain() }()
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestNATSSubscriptionGracefulShutdown(t *testing.T) {
 
 	nc, err := nats.Connect(s.ClientURL())
 	require.NoError(t, err)
-	defer nc.Drain()
+	defer func() { _ = nc.Drain() }()
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
