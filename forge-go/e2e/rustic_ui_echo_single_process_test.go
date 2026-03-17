@@ -145,7 +145,7 @@ func TestE2E_RusticUIEchoLaunchSingleProcess(t *testing.T) {
 // When natsURL is non-empty, the server is started with --nats and
 // FORGE_EXTRA_DEPS is set to rusticai-nats so that Python agents
 // install the NATS messaging backend from PyPI via uvx.
-func startSingleProcessForgeServer(t *testing.T, binPath, forgeRoot string, natsURL string) *singleProcessForgeServer {
+func startSingleProcessForgeServer(t *testing.T, binPath, forgeRoot string, natsURL string, extraArgs ...string) *singleProcessForgeServer {
 	t.Helper()
 
 	listenAddr, err := reserveLocalAddr()
@@ -177,6 +177,7 @@ func startSingleProcessForgeServer(t *testing.T, binPath, forgeRoot string, nats
 	if natsURL != "" {
 		args = append(args, "--nats", natsURL)
 	}
+	args = append(args, extraArgs...)
 
 	cmd := exec.Command(binPath, args...)
 	cmd.Dir = forgeRoot

@@ -24,17 +24,19 @@ type SupervisorFactory func(orgID string) supervisor.AgentSupervisor
 
 // ControlQueueHandler wiring layer connecting the control transport to the localized ProcessSupervisor.
 type ControlQueueHandler struct {
-	registry   *registry.Registry
-	secrets    secrets.SecretProvider
-	sup        supervisor.AgentSupervisor
-	supByOrg   map[string]supervisor.AgentSupervisor
-	supMu      sync.RWMutex
-	supFactory SupervisorFactory
-	agentOrg   map[string]string
-	agentMu    sync.RWMutex
-	store      store.Store
-	listener   *ControlQueueListener
-	responder  *ControlQueueResponder
+	registry    *registry.Registry
+	secrets     secrets.SecretProvider
+	sup         supervisor.AgentSupervisor
+	supByOrg    map[string]supervisor.AgentSupervisor
+	supMu       sync.RWMutex
+	supFactory  SupervisorFactory
+	agentOrg    map[string]string
+	agentMu     sync.RWMutex
+	store       store.Store
+	listener    *ControlQueueListener
+	responder   *ControlQueueResponder
+	statusStore supervisor.AgentStatusStore
+	nodeID      string
 }
 
 // NewControlQueueHandler creates a fully integrated control handler.
@@ -44,8 +46,9 @@ func NewControlQueueHandler(
 	sec secrets.SecretProvider,
 	sup supervisor.AgentSupervisor,
 	db store.Store,
+	opts ...HandlerOption,
 ) *ControlQueueHandler {
-	return NewControlQueueHandlerWithQueue(cp, reg, sec, sup, db, ControlQueueRequestKey)
+	return NewControlQueueHandlerWithQueue(cp, reg, sec, sup, db, ControlQueueRequestKey, opts...)
 }
 
 // NewControlQueueHandlerWithFactory creates a handler that builds per-org supervisors via the factory.
@@ -55,8 +58,9 @@ func NewControlQueueHandlerWithFactory(
 	sec secrets.SecretProvider,
 	factory SupervisorFactory,
 	db store.Store,
+	opts ...HandlerOption,
 ) *ControlQueueHandler {
-	return NewControlQueueHandlerWithQueueFactory(cp, reg, sec, factory, db, ControlQueueRequestKey)
+	return NewControlQueueHandlerWithQueueFactory(cp, reg, sec, factory, db, ControlQueueRequestKey, opts...)
 }
 
 // NewControlQueueHandlerWithQueue creates a control handler bound to a specific queue key.
@@ -67,8 +71,9 @@ func NewControlQueueHandlerWithQueue(
 	sup supervisor.AgentSupervisor,
 	db store.Store,
 	queueKey string,
+	opts ...HandlerOption,
 ) *ControlQueueHandler {
-	return newControlQueueHandler(cp, reg, sec, sup, nil, db, queueKey)
+	return newControlQueueHandler(cp, reg, sec, sup, nil, db, queueKey, opts...)
 }
 
 // NewControlQueueHandlerWithQueueFactory creates a handler with per-org factory bound to a specific queue key.
@@ -79,8 +84,22 @@ func NewControlQueueHandlerWithQueueFactory(
 	factory SupervisorFactory,
 	db store.Store,
 	queueKey string,
+	opts ...HandlerOption,
 ) *ControlQueueHandler {
-	return newControlQueueHandler(cp, reg, sec, nil, factory, db, queueKey)
+	return newControlQueueHandler(cp, reg, sec, nil, factory, db, queueKey, opts...)
+}
+
+// HandlerOption configures optional ControlQueueHandler fields.
+type HandlerOption func(*ControlQueueHandler)
+
+// WithStatusStore sets the AgentStatusStore used for cross-node idempotency and ack writes.
+func WithStatusStore(ss supervisor.AgentStatusStore) HandlerOption {
+	return func(h *ControlQueueHandler) { h.statusStore = ss }
+}
+
+// WithNodeID sets the node identifier written into ack status entries.
+func WithNodeID(id string) HandlerOption {
+	return func(h *ControlQueueHandler) { h.nodeID = id }
 }
 
 func newControlQueueHandler(
@@ -91,6 +110,7 @@ func newControlQueueHandler(
 	factory SupervisorFactory,
 	db store.Store,
 	queueKey string,
+	opts ...HandlerOption,
 ) *ControlQueueHandler {
 	listener := NewControlQueueListenerWithQueue(cp, queueKey)
 	responder := NewControlQueueResponder(cp)
@@ -105,6 +125,10 @@ func newControlQueueHandler(
 		store:      db,
 		listener:   listener,
 		responder:  responder,
+	}
+
+	for _, opt := range opts {
+		opt(handler)
 	}
 
 	listener.OnSpawn = handler.handleSpawn
@@ -147,6 +171,33 @@ func (h *ControlQueueHandler) sendError(ctx context.Context, requestID, detail s
 // handleSpawn orchestrates booting an agent based on the remote SpawnRequest
 func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.SpawnRequest) {
 	slog.Info("handleSpawn: received spawn request", "agent_id", req.AgentSpec.ID, "class", req.AgentSpec.ClassName, "guild", req.GuildID, "request_id", req.RequestID)
+
+	// IDEMPOTENCY GATE: check StatusStore for cross-node awareness
+	if h.statusStore != nil {
+		existing, err := h.statusStore.GetStatus(ctx, req.GuildID, req.AgentSpec.ID)
+		if err == nil && existing != nil &&
+			(existing.State == "running" || existing.State == "starting") &&
+			existing.NodeID != "" && existing.NodeID != h.nodeID {
+			slog.Info("handleSpawn: agent active on different node, skipping",
+				"agent_id", req.AgentSpec.ID,
+				"other_node", existing.NodeID, "state", existing.State)
+			_ = h.responder.SendResponse(ctx, req.RequestID, &protocol.SpawnResponse{
+				RequestID: req.RequestID, Success: true,
+				Message: fmt.Sprintf("agent already %s on node %s", existing.State, existing.NodeID),
+			})
+			return
+		}
+	}
+
+	// ACK: Write "starting" to StatusStore immediately (distributed signal)
+	if h.statusStore != nil {
+		_ = h.statusStore.WriteStatus(ctx, req.GuildID, req.AgentSpec.ID,
+			&supervisor.AgentStatusJSON{
+				State:     "starting",
+				NodeID:    h.nodeID,
+				Timestamp: time.Now(),
+			}, 120*time.Second)
+	}
 
 	entry, err := h.registry.Lookup(req.AgentSpec.ClassName)
 	if err != nil {
@@ -215,7 +266,11 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 
 	err = sup.Launch(ctx, req.GuildID, &req.AgentSpec, h.registry, envVars)
 	if err != nil {
-		slog.Error("handleSpawn: supervisor launch failed", "agent_id", req.AgentSpec.ID, "org", orgID, "error", err)
+		if strings.Contains(err.Error(), "already managed") {
+			slog.Warn("handleSpawn: agent already managed locally", "agent_id", req.AgentSpec.ID, "org", orgID, "error", err)
+		} else {
+			slog.Error("handleSpawn: supervisor launch failed", "agent_id", req.AgentSpec.ID, "org", orgID, "error", err)
+		}
 		h.sendError(ctx, req.RequestID, fmt.Sprintf("failed to launch process via supervisor: %v", err))
 		return
 	}

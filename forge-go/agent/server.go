@@ -172,6 +172,15 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 	queueListener := control.NewControlQueueListener(controlPlane)
 
 	queueListener.OnSpawn = func(ctx context.Context, req *protocol.SpawnRequest) {
+		agentID := req.AgentSpec.ID
+
+		// IDEMPOTENCY GATE: skip if already actively tracked in PlacementMap
+		if scheduler.GlobalPlacementMap.IsActivelyTracked(req.GuildID, agentID) {
+			slog.Default().Info("Skipping duplicate spawn, agent already tracked",
+				"guild", req.GuildID, "agent", agentID)
+			return
+		}
+
 		// Load guild model once; used for both messaging config and spec attachment.
 		gm, err := db.GetGuild(req.GuildID)
 		if err != nil {
@@ -197,11 +206,11 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 
 		nodeID, err := scheduler.GlobalScheduler.Schedule(req.AgentSpec)
 		if err != nil {
-			slog.Default().Error("Failed to schedule agent", "guild", req.GuildID, "agent", req.AgentSpec.ID, "error", err)
+			slog.Default().Error("Failed to schedule agent", "guild", req.GuildID, "agent", agentID, "error", err)
 			return
 		}
 		payloadBytes, _ := json.Marshal(req)
-		scheduler.GlobalPlacementMap.Place(req.GuildID, req.AgentSpec.ID, nodeID, payloadBytes)
+		attempts := scheduler.GlobalPlacementMap.MarkDispatched(req.GuildID, agentID, nodeID, payloadBytes)
 
 		wrapper := control.ControlMessageWrapper{
 			Command: "spawn",
@@ -210,7 +219,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 
 		wrapperBytes, _ := json.Marshal(wrapper)
 		_ = controlPlane.Push(ctx, "forge:control:node:"+nodeID, wrapperBytes)
-		slog.Default().Info("Scheduled agent to node", "agent", req.AgentSpec.ID, "node_id", nodeID)
+		slog.Default().Info("Scheduled agent to node", "agent", agentID, "node_id", nodeID, "attempt", attempts)
 	}
 	queueListener.OnStop = func(ctx context.Context, req *protocol.StopRequest) {
 		placement, ok := scheduler.GlobalPlacementMap.Find(req.GuildID, req.AgentID)
@@ -268,7 +277,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 		}
 	}()
 
-	reconciler := scheduler.NewReconciler(scheduler.GlobalNodeRegistry, scheduler.GlobalPlacementMap, controlPlane, elector)
+	reconciler := scheduler.NewReconciler(scheduler.GlobalNodeRegistry, scheduler.GlobalPlacementMap, controlPlane, elector, statusStore, scheduler.DefaultReconcilerConfig())
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

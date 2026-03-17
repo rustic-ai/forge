@@ -166,7 +166,10 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 	sec := secrets.DefaultProvider()
 	supervisorFactory := buildOrgSupervisorFactory(statusStore, config.DefaultSupervisor, config.DefaultTransport, msgBackend, config.DataDir, config.AttachProcessTree, config.ZMQBridgeMode)
 	nodeQueueKey := "forge:control:node:" + config.NodeID
-	queueHandler := control.NewControlQueueHandlerWithQueueFactory(controlPlane, reg, sec, supervisorFactory, nil, nodeQueueKey)
+	queueHandler := control.NewControlQueueHandlerWithQueueFactory(controlPlane, reg, sec, supervisorFactory, nil, nodeQueueKey,
+		control.WithStatusStore(statusStore),
+		control.WithNodeID(config.NodeID),
+	)
 	if err := queueHandler.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start node queue listener: %w", err)
 	}
