@@ -20,6 +20,12 @@ import (
 func Bootstrap(ctx context.Context, db store.Store, pusher protocol.ControlPusher, spec *protocol.GuildSpec, orgID string, dependencyConfigPath string) (*store.GuildModel, error) {
 	applyDefaults(spec)
 
+	// Merge dependency configs: forge-home deps take priority over conf deps;
+	// spec-level deps (already in spec.DependencyMap) take priority over both.
+	forgeHomeDeps := filepath.Join(forgepath.ForgeHome(), "agent-dependencies.yaml")
+	if err := mergeDependencies(spec, forgeHomeDeps); err != nil {
+		return nil, fmt.Errorf("failed to merge forge-home dependencies: %w", err)
+	}
 	if err := mergeDependencies(spec, dependencyConfigPath); err != nil {
 		return nil, fmt.Errorf("failed to merge dependencies: %w", err)
 	}

@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 
 	"github.com/cbroglie/mustache"
+	"github.com/rustic-ai/forge/forge-go/forgepath"
 	"github.com/rustic-ai/forge/forge-go/helper/idgen"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"gopkg.in/yaml.v3"
@@ -272,6 +274,12 @@ func (b *GuildBuilder) BuildSpec() (*protocol.GuildSpec, error) {
 
 	b.applyDefaults()
 
+	// Merge dependency configs: forge-home deps take priority over conf deps;
+	// spec-level deps (already in DependencyMap) take priority over both.
+	forgeHomeDeps := filepath.Join(forgepath.ForgeHome(), "agent-dependencies.yaml")
+	if err := b.mergeDependencyMap(forgeHomeDeps); err != nil {
+		return nil, fmt.Errorf("failed to merge forge-home dependencies: %w", err)
+	}
 	configPath := os.Getenv("FORGE_DEPENDENCY_CONFIG")
 	if configPath == "" {
 		configPath = "conf/agent-dependencies.yaml"
