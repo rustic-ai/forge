@@ -17,7 +17,7 @@ func TestRedisControlTransport_PushPop(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	transport := NewRedisControlTransport(rdb)
@@ -37,7 +37,7 @@ func TestRedisControlTransport_PopTimeout(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	transport := NewRedisControlTransport(rdb)
@@ -53,7 +53,7 @@ func TestRedisControlTransport_QueueDepth(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	transport := NewRedisControlTransport(rdb)
@@ -76,7 +76,7 @@ func TestRedisControlTransport_PushWaitResponse(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	transport := NewRedisControlTransport(rdb)
@@ -96,7 +96,7 @@ func TestRedisControlTransport_WaitResponseTimeout(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	transport := NewRedisControlTransport(rdb)

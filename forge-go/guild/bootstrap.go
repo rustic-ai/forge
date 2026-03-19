@@ -22,7 +22,7 @@ func Bootstrap(ctx context.Context, db store.Store, pusher protocol.ControlPushe
 
 	// Merge dependency configs: forge-home deps take priority over conf deps;
 	// spec-level deps (already in spec.DependencyMap) take priority over both.
-	forgeHomeDeps := filepath.Join(forgepath.ForgeHome(), "agent-dependencies.yaml")
+	forgeHomeDeps := forgepath.Resolve(forgepath.DependencyConfigFile)
 	if err := mergeDependencies(spec, forgeHomeDeps); err != nil {
 		return nil, fmt.Errorf("failed to merge forge-home dependencies: %w", err)
 	}

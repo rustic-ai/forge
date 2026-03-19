@@ -72,7 +72,7 @@ func TestManagerEnsureGuildAndGetSpec(t *testing.T) {
 
 	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-1"}
 	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var ensureResp EnsureGuildResponse
@@ -83,7 +83,7 @@ func TestManagerEnsureGuildAndGetSpec(t *testing.T) {
 	assert.Equal(t, "g-manager-1", ensureResp.GuildSpec.ID)
 
 	getResp := jsonRequest(t, http.MethodGet, ts.URL+"/manager/guilds/g-manager-1/spec", nil, nil)
-	defer getResp.Body.Close()
+	defer func() { _ = getResp.Body.Close() }()
 	require.Equal(t, http.StatusOK, getResp.StatusCode)
 
 	var getPayload GuildSpecWithStatusResponse
@@ -93,7 +93,7 @@ func TestManagerEnsureGuildAndGetSpec(t *testing.T) {
 	assert.Equal(t, "g-manager-1#a-0", getPayload.GuildSpec.Agents[0].ID)
 
 	resp2 := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 	var ensureResp2 EnsureGuildResponse
 	require.NoError(t, json.NewDecoder(resp2.Body).Decode(&ensureResp2))
@@ -112,7 +112,7 @@ func TestManagerAgentRouteAndHeartbeatLifecycle(t *testing.T) {
 
 	agentSpec := protocol.AgentSpec{ID: "g-manager-2#a-1", Name: "A1", Description: "d", ClassName: "test.Agent"}
 	agResp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/g-manager-2/agents/ensure", agentSpec, nil)
-	defer agResp.Body.Close()
+	defer func() { _ = agResp.Body.Close() }()
 	require.Equal(t, http.StatusCreated, agResp.StatusCode)
 
 	updReq := UpdateAgentStatusRequest{Status: store.AgentStatusStarting}
@@ -123,7 +123,7 @@ func TestManagerAgentRouteAndHeartbeatLifecycle(t *testing.T) {
 		updReq,
 		nil,
 	)
-	defer updResp.Body.Close()
+	defer func() { _ = updResp.Body.Close() }()
 	require.Equal(t, http.StatusOK, updResp.StatusCode)
 	var updPayload UpdateAgentStatusResponse
 	require.NoError(t, json.NewDecoder(updResp.Body).Decode(&updPayload))
@@ -132,7 +132,7 @@ func TestManagerAgentRouteAndHeartbeatLifecycle(t *testing.T) {
 
 	routeReq := AddRouteRequest{RoutingRule: &protocol.RoutingRule{AgentType: strPtr("test.Agent")}}
 	routeResp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/g-manager-2/routes", routeReq, nil)
-	defer routeResp.Body.Close()
+	defer func() { _ = routeResp.Body.Close() }()
 	require.Equal(t, http.StatusCreated, routeResp.StatusCode)
 	var routePayload AddRouteResponse
 	require.NoError(t, json.NewDecoder(routeResp.Body).Decode(&routePayload))
@@ -145,7 +145,7 @@ func TestManagerAgentRouteAndHeartbeatLifecycle(t *testing.T) {
 		nil,
 		nil,
 	)
-	defer rmResp.Body.Close()
+	defer func() { _ = rmResp.Body.Close() }()
 	require.Equal(t, http.StatusOK, rmResp.StatusCode)
 	var rmPayload RemoveRouteResponse
 	require.NoError(t, json.NewDecoder(rmResp.Body).Decode(&rmPayload))
@@ -157,7 +157,7 @@ func TestManagerAgentRouteAndHeartbeatLifecycle(t *testing.T) {
 		GuildStatus: store.GuildStatusRunning,
 	}
 	hbResp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/g-manager-2/lifecycle/heartbeat", hbReq, nil)
-	defer hbResp.Body.Close()
+	defer func() { _ = hbResp.Body.Close() }()
 	require.Equal(t, http.StatusOK, hbResp.StatusCode)
 	var hbPayload HeartbeatStatusUpdateResponse
 	require.NoError(t, json.NewDecoder(hbResp.Body).Decode(&hbPayload))
@@ -176,7 +176,7 @@ func TestManagerEndpointAuthToken(t *testing.T) {
 	}
 
 	unauth := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", req, nil)
-	defer unauth.Body.Close()
+	defer func() { _ = unauth.Body.Close() }()
 	assert.Equal(t, http.StatusUnauthorized, unauth.StatusCode)
 
 	auth := jsonRequest(
@@ -186,7 +186,7 @@ func TestManagerEndpointAuthToken(t *testing.T) {
 		req,
 		map[string]string{"X-Forge-Manager-Token": "secret-token"},
 	)
-	defer auth.Body.Close()
+	defer func() { _ = auth.Body.Close() }()
 	assert.Equal(t, http.StatusOK, auth.StatusCode)
 }
 
@@ -228,7 +228,7 @@ func TestManagerEnsureGuild_CreatesWithResolvedFilesystemPathBase(t *testing.T) 
 
 	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-fs"}
 	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var ensureResp EnsureGuildResponse
@@ -244,7 +244,7 @@ func TestManagerEnsureGuild_CreatesWithResolvedFilesystemPathBase(t *testing.T) 
 	assert.Equal(t, filepath.Join(globalRoot, "private"), agentDep.Properties["path_base"])
 
 	resp2 := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
 	var ensureResp2 EnsureGuildResponse
@@ -280,7 +280,7 @@ func TestManagerEnsureGuild_RejectsFilesystemTraversal(t *testing.T) {
 
 	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-fs"}
 	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
 }
 
@@ -320,7 +320,7 @@ func TestManagerEnsureGuild_CreatesWithS3FilesystemGlobalRoot(t *testing.T) {
 
 	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-s3"}
 	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var ensureResp EnsureGuildResponse
@@ -374,7 +374,7 @@ func TestManagerEnsureGuild_CreatesWithGCSFilesystemGlobalRoot(t *testing.T) {
 
 	ensureReq := EnsureGuildRequest{GuildSpec: spec, OrganizationID: "org-gcs"}
 	resp := jsonRequest(t, http.MethodPost, ts.URL+"/manager/guilds/ensure", ensureReq, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var ensureResp EnsureGuildResponse

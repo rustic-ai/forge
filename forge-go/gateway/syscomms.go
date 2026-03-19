@@ -59,7 +59,7 @@ func sysCommsHandler(msgClient messaging.Backend, guildStore store.Store, gemGen
 			logger.Error("syscomms failed websocket upgrade", "err", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		socketSenderID := fmt.Sprintf("sys_comms_socket:%s", userID)
 
@@ -68,7 +68,7 @@ func sysCommsHandler(msgClient messaging.Backend, guildStore store.Store, gemGen
 			logger.Error("Failed to subscribe syscomms", "err", err)
 			return
 		}
-		defer sub.Close()
+		defer func() { _ = sub.Close() }()
 
 		healthCheckGemID, _ := gemGen.Generate(protocol.PriorityHigh)
 		// Python emits naive datetime strings for HealthCheckRequest (no timezone suffix).
@@ -89,7 +89,7 @@ func sysCommsHandler(msgClient messaging.Backend, guildStore store.Store, gemGen
 			for subMsg := range sub.Channel() {
 				m := subMsg.Message
 
-				var spanCtx context.Context = ctx
+				spanCtx := ctx
 				if m.Traceparent != nil && *m.Traceparent != "" && *m.Traceparent != noTracing {
 					carrier := propagation.MapCarrier{"traceparent": *m.Traceparent}
 					spanCtx = otel.GetTextMapPropagator().Extract(context.Background(), carrier)

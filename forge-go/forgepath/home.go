@@ -6,6 +6,27 @@ import (
 	"sync"
 )
 
+const (
+	// DependencyConfigFile is the basename of the dependency-map YAML file.
+	DependencyConfigFile = "agent-dependencies.yaml"
+
+	// DependencyConfigEnv is the env var that overrides the default config path.
+	DependencyConfigEnv = "FORGE_DEPENDENCY_CONFIG"
+
+	// DefaultDependencyConfigPath is the default relative path used when the
+	// env var is not set and no CLI flag overrides it.
+	DefaultDependencyConfigPath = "conf/" + DependencyConfigFile
+)
+
+// DependencyConfigPath returns the dependency config file path, checking the
+// FORGE_DEPENDENCY_CONFIG env var first and falling back to the default.
+func DependencyConfigPath() string {
+	if p := os.Getenv(DependencyConfigEnv); p != "" {
+		return p
+	}
+	return DefaultDependencyConfigPath
+}
+
 var (
 	mu       sync.Mutex
 	override string // set by CLI flag

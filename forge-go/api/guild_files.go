@@ -44,7 +44,7 @@ func (s *Server) handleFileUploadCore(w http.ResponseWriter, r *http.Request, gu
 		ReplyError(w, http.StatusBadRequest, "Invalid input: file and filename are required")
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	content, err := io.ReadAll(file)
 	if err != nil {

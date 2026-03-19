@@ -10,7 +10,7 @@ import (
 
 func TestStore_GuildSpecLifecycle_DBParity(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	spec := buildRichLifecycleSpec("lifecycle-guild-1")
 	model := store.FromGuildSpec(spec, "org-lifecycle")
@@ -35,7 +35,7 @@ func TestStore_GuildSpecLifecycle_DBParity(t *testing.T) {
 
 func TestStore_GuildSpecLifecycle_EmptyCollectionsStayNonNil(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	listenToDefault := true
 	actOnlyWhenTagged := false

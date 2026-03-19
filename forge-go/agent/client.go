@@ -39,7 +39,7 @@ func registerNode(ctx context.Context, serverURL string, payload []byte) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("server returned non-2xx status during registration: %d", resp.StatusCode)
 	}
@@ -55,7 +55,7 @@ func deregisterNode(ctx context.Context, serverURL, nodeID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("server returned unexpected status during deregistration: %d", resp.StatusCode)
 	}
@@ -111,7 +111,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		msgBackend = natsBackend
 	} else if config.RedisURL != "" {
 		rdb := redis.NewClient(&redis.Options{Addr: config.RedisURL})
-		defer rdb.Close()
+		defer func() { _ = rdb.Close() }()
 		if err := rdb.Ping(ctx).Err(); err != nil {
 			return fmt.Errorf("failed to connect to redis at %s: %w", config.RedisURL, err)
 		}
@@ -189,7 +189,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 				req, _ := http.NewRequestWithContext(ctx, http.MethodPost, hbURL, nil)
 				if r, err := client.Do(req); err == nil {
 					status := r.StatusCode
-					r.Body.Close()
+					_ = r.Body.Close()
 					if status >= 200 && status < 300 {
 						log.Debug("Sent heartbeat", "node_id", config.NodeID)
 						continue

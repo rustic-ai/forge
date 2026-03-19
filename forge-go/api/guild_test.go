@@ -69,9 +69,9 @@ filesystem:
 	mux.HandleFunc("DELETE /api/guilds/{id}/agents/{agent_id}/files/{filename}", srv.HandleAgentFileDelete)
 
 	cleanup := func() {
-		rdb.Close()
+		_ = rdb.Close()
 		mr.Close()
-		os.RemoveAll("conf")
+		_ = os.RemoveAll("conf")
 	}
 
 	return srv, mr, dbStore, mux, cleanup

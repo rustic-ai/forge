@@ -187,7 +187,7 @@ func (s *LocalFileStore) Read(
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	return io.ReadAll(reader)
 }
@@ -315,7 +315,7 @@ func (s *LocalFileStore) readMeta(ctx context.Context, bucket *blob.Bucket, scop
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	raw, err := io.ReadAll(reader)
 	if err != nil {

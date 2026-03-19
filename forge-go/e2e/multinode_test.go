@@ -35,7 +35,7 @@ func TestLevel1_MultiNodeSchedulingIntegration(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	// Reset Global states for fresh test
 	scheduler.GlobalNodeRegistry = scheduler.NewNodeRegistry()
@@ -73,7 +73,7 @@ func TestLevel1_MultiNodeSchedulingIntegration(t *testing.T) {
 		resp, err := http.Post(fmt.Sprintf("%s/nodes/register", ts.URL), "application/json", bytes.NewBuffer(body))
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	registerNode("node-a", 2, 2048)

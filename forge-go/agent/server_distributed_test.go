@@ -27,7 +27,7 @@ func TestStartServer_EnrichesMessagingConfigForNodeDispatch(t *testing.T) {
 	defer s.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	scheduler.GlobalNodeRegistry = scheduler.NewNodeRegistry()
 	scheduler.GlobalPlacementMap = scheduler.NewPlacementMap()
@@ -56,7 +56,7 @@ func TestStartServer_EnrichesMessagingConfigForNodeDispatch(t *testing.T) {
 		}
 		resp, err := http.Get(baseURL + "/readyz")
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				break
 			}
@@ -86,7 +86,7 @@ func TestStartServer_EnrichesMessagingConfigForNodeDispatch(t *testing.T) {
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	var launchResp map[string]interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&launchResp))
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	createdGuildID, ok := launchResp["id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, createdGuildID)
@@ -103,7 +103,7 @@ func TestStartServer_EnrichesMessagingConfigForNodeDispatch(t *testing.T) {
 	nResp, err := http.Post(baseURL+"/nodes/register", "application/json", bytes.NewBuffer(nodeBody))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, nResp.StatusCode)
-	nResp.Body.Close()
+	_ = nResp.Body.Close()
 
 	spawnReq := protocol.SpawnRequest{
 		RequestID:      "dispatch-spawn-1",
@@ -218,7 +218,7 @@ entries:
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}, 8*time.Second, 150*time.Millisecond, "server did not become ready")
 
@@ -227,7 +227,7 @@ entries:
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return false
 		}
@@ -244,7 +244,7 @@ entries:
 	}, 10*time.Second, 200*time.Millisecond, "embedded client node did not register")
 
 	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	require.NoError(t, rdb.Ping(context.Background()).Err(), "embedded redis should be reachable at configured address")
 
 	cancel()
@@ -261,7 +261,7 @@ entries:
 func TestStartServer_FailsWhenEmbeddedRedisAddressOccupied(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	cfg := &ServerConfig{
 		DatabaseURL:        "file:testserveroccupiedredis?mode=memory&cache=shared",

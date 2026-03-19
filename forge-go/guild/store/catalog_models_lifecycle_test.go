@@ -7,7 +7,7 @@ func TestAllGormModels_LifecycleAndDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init gorm store: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	gs, ok := s.(*gormStore)
 	if !ok {

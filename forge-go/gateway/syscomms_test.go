@@ -53,8 +53,8 @@ func setupSysTestServer(t *testing.T) (*httptest.Server, *miniredis.Miniredis, *
 
 	cleanup := func() {
 		ts.Close()
-		rdb.Close()
-		dbStore.Close()
+		_ = rdb.Close()
+		_ = dbStore.Close()
 		mr.Close()
 	}
 
@@ -90,17 +90,17 @@ func TestSysCommsConnectionAnnounce(t *testing.T) {
 
 	// 1. Subscribe to guild_status_topic using go-redis directly for test assertion
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	pubsub := rdb.Subscribe(ctx, "g1:guild_status_topic")
-	defer pubsub.Close()
+	defer func() { _ = pubsub.Close() }()
 	_, err := pubsub.Receive(ctx)
 	require.NoError(t, err)
 
 	// 2. Connect WebSocket Client
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// 3. Verify HealthCheckRequest announcement published to redis
 	msgCh := pubsub.Channel()
@@ -124,7 +124,7 @@ func TestSysCommsIngressMutation(t *testing.T) {
 	defer cleanup()
 
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Need to wait slightly to let the connection announce pass so we know pumps are running
 	time.Sleep(100 * time.Millisecond)
@@ -147,7 +147,7 @@ func TestSysCommsIngressMutation(t *testing.T) {
 	// 3. Inspect Redis for published message on user_system:u1
 	ctx := context.Background()
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	sysInbox := "g1:user_system:u1"
 
@@ -187,7 +187,7 @@ func TestSysCommsEgressPassthrough(t *testing.T) {
 	defer cleanup()
 
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	require.NoError(t, conn.SetReadDeadline(time.Time{}))
 	ctx := context.Background()
@@ -255,7 +255,7 @@ func TestSysCommsIngressDropsMessagesMissingFormatOrPayload(t *testing.T) {
 	defer cleanup()
 
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Missing format
@@ -271,7 +271,7 @@ func TestSysCommsIngressDropsMessagesMissingFormatOrPayload(t *testing.T) {
 
 	ctx := context.Background()
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	sysInbox := "g1:user_system:u1"
 	zrange, err := rdb.ZRange(ctx, sysInbox, 0, -1).Result()

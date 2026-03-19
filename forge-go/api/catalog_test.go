@@ -200,9 +200,9 @@ func TestGetAccessibleBlueprintsHTTP(t *testing.T) {
 
 	// Create some blueprints
 	orgID := "org_1"
-	db.CreateBlueprint(&store.Blueprint{Name: "BP Public", Exposure: store.ExposurePublic, AuthorID: "user_x"})
-	db.CreateBlueprint(&store.Blueprint{Name: "BP Private U1", Exposure: store.ExposurePrivate, AuthorID: "user_1"})
-	db.CreateBlueprint(&store.Blueprint{Name: "BP Org 1", Exposure: store.ExposureOrganization, AuthorID: "user_x", OrganizationID: &orgID})
+	_, _ = db.CreateBlueprint(&store.Blueprint{Name: "BP Public", Exposure: store.ExposurePublic, AuthorID: "user_x"})
+	_, _ = db.CreateBlueprint(&store.Blueprint{Name: "BP Private U1", Exposure: store.ExposurePrivate, AuthorID: "user_1"})
+	_, _ = db.CreateBlueprint(&store.Blueprint{Name: "BP Org 1", Exposure: store.ExposureOrganization, AuthorID: "user_x", OrganizationID: &orgID})
 
 	t.Run("without org_id", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/catalog/users/user_1/blueprints/accessible", nil)

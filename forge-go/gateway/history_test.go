@@ -67,7 +67,7 @@ func TestRetrieveHistory_Redis(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	msgClient := messaging.NewClient(rdb)
 	runRetrieveHistoryTest(t, msgClient)

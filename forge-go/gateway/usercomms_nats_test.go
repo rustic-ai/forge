@@ -28,7 +28,7 @@ func setupNATSTestServer(t *testing.T) (messaging.Backend, store.Store, *httptes
 	dbPath := filepath.Join(t.TempDir(), "usercomms-nats-test.db")
 	dbStore, err := store.NewGormStore(store.DriverSQLite, dbPath)
 	require.NoError(t, err)
-	t.Cleanup(func() { dbStore.Close() })
+	t.Cleanup(func() { _ = dbStore.Close() })
 
 	require.NoError(t, dbStore.CreateGuild(&store.GuildModel{
 		ID:             "g1",
@@ -56,7 +56,7 @@ func TestNATSUserCommsIngressMutation(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/guilds/g1/usercomms/u1/Alice"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -141,7 +141,7 @@ func TestNATSUserCommsEgressOnlyUserNotifications(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/guilds/g1/usercomms/u1/Alice"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for subscription to settle
 	time.Sleep(100 * time.Millisecond)
@@ -205,7 +205,7 @@ func TestNATSUserCommsDropsInvalidMessageHistory(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/guilds/g1/usercomms/u1/Alice"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	rawMsg := map[string]interface{}{
 		"format": "rustic_ai.core.guild.agent_ext.depends.llm.models.ChatCompletionRequest",

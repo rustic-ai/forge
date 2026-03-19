@@ -12,7 +12,7 @@ func TestDSL_Lifecycle_ParseBuildValidateStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	files, err := filepath.Glob("testdata/*.yaml")
 	if err != nil {

@@ -55,7 +55,7 @@ func (r *RedisBackend) Subscribe(ctx context.Context, namespace string, topics .
 	// Wait for subscription confirmation to ensure topics are fully bound before returning
 	_, err := pubsub.Receive(ctx)
 	if err != nil {
-		pubsub.Close()
+		_ = pubsub.Close()
 		return nil, fmt.Errorf("failed to subscribe to topics %v: %w", topics, err)
 	}
 

@@ -232,14 +232,14 @@ func validateBlueprintSpecForCreate(spec map[string]interface{}, s store.Store) 
 	delete(specCopy, "id")
 	specBytes, err := json.Marshal(specCopy)
 	if err != nil {
-		return fmt.Errorf("Invalid GuildSpec: %w", err)
+		return fmt.Errorf("invalid guild spec: %w", err)
 	}
 	var guildSpec protocol.GuildSpec
 	if err := json.Unmarshal(specBytes, &guildSpec); err != nil {
-		return fmt.Errorf("Invalid GuildSpec: %w", err)
+		return fmt.Errorf("invalid guild spec: %w", err)
 	}
 	if _, err := guild.GuildBuilderFromSpec(&guildSpec).BuildSpec(); err != nil {
-		return fmt.Errorf("Invalid GuildSpec: %w", err)
+		return fmt.Errorf("invalid guild spec: %w", err)
 	}
 
 	return nil

@@ -18,7 +18,7 @@ func TestRedisElector_AcquireAndHeartbeat(t *testing.T) {
 	defer s.Close()
 
 	client := redis.NewClient(&redis.Options{Addr: s.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	elector := NewRedisElector(client, "node-1", "forge:leader", 1*time.Second)
 
@@ -88,7 +88,7 @@ func TestRedisElector_Failover(t *testing.T) {
 	defer s.Close()
 
 	client := redis.NewClient(&redis.Options{Addr: s.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()

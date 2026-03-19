@@ -12,7 +12,7 @@ import (
 
 func TestStore_AllE2ERoundtrip(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	files, err := filepath.Glob("../testdata/e2e/*.yaml")
 	if err != nil || len(files) == 0 {

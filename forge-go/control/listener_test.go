@@ -20,7 +20,7 @@ func TestListener_HandleSpawnRequest(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	transport := NewRedisControlTransport(rdb)
@@ -73,7 +73,7 @@ func TestListener_CustomQueueKey(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	const nodeQueue = "forge:control:node:test-node-1"

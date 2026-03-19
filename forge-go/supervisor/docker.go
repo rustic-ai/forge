@@ -134,7 +134,7 @@ func (d *DockerSupervisor) ensureImage(ctx context.Context, imageRef string) err
 	if err != nil {
 		return fmt.Errorf("failed to pull image %s: %w", imageRef, err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	_, _ = io.Copy(io.Discard, out)
 	return nil
@@ -503,7 +503,7 @@ func (d *DockerSupervisor) streamLogs(ctx context.Context, guildID, agentID, con
 		logger.Error("failed to attach to container logs", "error", err)
 		return
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	stdoutReader, stdoutWriter := io.Pipe()
 	stderrReader, stderrWriter := io.Pipe()
@@ -523,8 +523,8 @@ func (d *DockerSupervisor) streamLogs(ctx context.Context, guildID, agentID, con
 	}()
 
 	_, _ = stdcopy.StdCopy(stdoutWriter, stderrWriter, out)
-	stdoutWriter.Close()
-	stderrWriter.Close()
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
 }
 
 func (d *DockerSupervisor) pollStats(ctx context.Context, guildID, agentID, containerID string) {
@@ -561,7 +561,7 @@ func (d *DockerSupervisor) pollStats(ctx context.Context, guildID, agentID, cont
 				}
 				telemetry.AgentMemoryBytes.WithLabelValues(guildID, agentID, "local-docker").Set(float64(v.MemoryStats.Usage))
 			}
-			stats.Body.Close()
+			_ = stats.Body.Close()
 
 			if d.statusStore != nil {
 				_ = d.statusStore.RefreshStatus(ctx, guildID, agentID, 30*time.Second)

@@ -44,7 +44,7 @@ func init() {
 	ServerCmd.Flags().StringVar(&serverListen, "listen", ":9090", "HTTP server bind address")
 	ServerCmd.Flags().StringVar(&serverManagerAPIBase, "manager-api-base-url", "", "Externally reachable Forge manager API base URL (e.g. http://forge.example.com:9090)")
 	ServerCmd.Flags().StringVar(&serverDataDir, "data-dir", "", "Base path for central file storage (default: <forge-home>/data)")
-	ServerCmd.Flags().StringVar(&serverDependencyConfig, "dependency-config", "./conf/agent-dependencies.yaml", "Path to dependency map config")
+	ServerCmd.Flags().StringVar(&serverDependencyConfig, "dependency-config", forgepath.DefaultDependencyConfigPath, "Path to dependency map config")
 	ServerCmd.Flags().BoolVar(&serverWithClient, "with-client", false, "Start an in-process Forge client/node")
 	ServerCmd.Flags().StringVar(&serverClientNodeID, "client-node-id", "", "Node ID for in-process client (default: hostname)")
 	ServerCmd.Flags().StringVar(&serverClientMetrics, "client-metrics-addr", ":9091", "Metrics bind address for in-process client")

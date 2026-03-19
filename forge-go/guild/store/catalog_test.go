@@ -92,7 +92,7 @@ func TestCatalogVisibility(t *testing.T) {
 	// "BP Shared Org 1" needs to be shared to org1
 	for _, bp := range bps {
 		if bp.Name == "BP Shared Org 1" {
-			db.ShareBlueprint(bp.ID, org1)
+			_ = db.ShareBlueprint(bp.ID, org1)
 		}
 	}
 

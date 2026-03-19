@@ -23,7 +23,7 @@ func TestNATSSubscriptionDelivery(t *testing.T) {
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -35,7 +35,7 @@ func TestNATSSubscriptionDelivery(t *testing.T) {
 	// 1. Subscribe.
 	sub, err := backend.Subscribe(ctx, ns, topic)
 	require.NoError(t, err)
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 
 	// 2. Publish a message directly via NATS core pub/sub to trigger the subscription callback.
 	gen, _ := protocol.NewGemstoneGenerator(1)
@@ -71,7 +71,7 @@ func TestNATSSubscriptionGracefulShutdown(t *testing.T) {
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	ctx := context.Background()
 

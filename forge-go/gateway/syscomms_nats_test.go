@@ -26,7 +26,7 @@ func setupNATSSysTestServer(t *testing.T) (*httptest.Server, messaging.Backend, 
 	dbPath := filepath.Join(t.TempDir(), "syscomms-nats-test.db")
 	dbStore, err := store.NewGormStore(store.DriverSQLite, dbPath)
 	require.NoError(t, err)
-	t.Cleanup(func() { dbStore.Close() })
+	t.Cleanup(func() { _ = dbStore.Close() })
 
 	require.NoError(t, dbStore.CreateGuild(&store.GuildModel{
 		ID:             "g1",
@@ -56,11 +56,11 @@ func TestNATSSysCommsConnectionAnnounce(t *testing.T) {
 	// Subscribe to guild_status_topic BEFORE connecting WebSocket so we don't miss the announce
 	sub, err := backend.Subscribe(ctx, "g1", "guild_status_topic")
 	require.NoError(t, err)
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 
 	// Connect WebSocket — this triggers the HealthCheckRequest announce
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Receive the announce from the subscription channel
 	select {
@@ -79,7 +79,7 @@ func TestNATSSysCommsIngressMutation(t *testing.T) {
 	ts, backend, _ := setupNATSSysTestServer(t)
 
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for connection announce to complete
 	time.Sleep(100 * time.Millisecond)
@@ -120,7 +120,7 @@ func TestNATSSysCommsEgressPassthrough(t *testing.T) {
 	ts, backend, _ := setupNATSSysTestServer(t)
 
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	require.NoError(t, conn.SetReadDeadline(time.Time{}))
 	ctx := context.Background()
@@ -179,7 +179,7 @@ func TestNATSSysCommsIngressDrops(t *testing.T) {
 	ts, backend, _ := setupNATSSysTestServer(t)
 
 	conn, _ := connectSysWS(t, ts, "g1", "u1")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Missing format

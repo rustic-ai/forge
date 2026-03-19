@@ -166,7 +166,7 @@ func downloadAndExtract(url, targetDirName, destBin string, isZip bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to download uv from %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("bad status: %s when downloading %s", resp.Status, url)
@@ -220,7 +220,7 @@ func downloadAndExtract(url, targetDirName, destBin string, isZip bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to read gzip stream: %w", err)
 	}
-	defer gzr.Close()
+	defer func() { _ = gzr.Close() }()
 
 	tr := tar.NewReader(gzr)
 

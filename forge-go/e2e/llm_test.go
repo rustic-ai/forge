@@ -34,7 +34,7 @@ func TestLevel3_LLMAgentIntegration(t *testing.T) {
 	defer s.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	guildID := "test-llm-guild"

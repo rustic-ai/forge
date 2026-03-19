@@ -45,7 +45,7 @@ func TestE2E_StrictDistributedDockerClient(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	scheduler.GlobalNodeRegistry = scheduler.NewNodeRegistry()
 	scheduler.GlobalPlacementMap = scheduler.NewPlacementMap()
@@ -95,7 +95,7 @@ agents:
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("readyz returned %d", resp.StatusCode)
 		}
@@ -156,7 +156,7 @@ agents:
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("nodes returned %d", resp.StatusCode)
 		}
@@ -173,7 +173,7 @@ agents:
 	})
 	launchResp, err := http.Post(baseURL+"/api/guilds", "application/json", bytes.NewBuffer(launchBody))
 	require.NoError(t, err)
-	defer launchResp.Body.Close()
+	defer func() { _ = launchResp.Body.Close() }()
 	require.Equal(t, http.StatusCreated, launchResp.StatusCode)
 
 	require.NoError(t, waitFor(30*time.Second, 300*time.Millisecond, func() error {

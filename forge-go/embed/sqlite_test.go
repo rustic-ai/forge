@@ -14,13 +14,13 @@ func TestStartSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dataDir)
+	defer func() { _ = os.RemoveAll(dataDir) }()
 
 	s, err := StartSQLite(dataDir)
 	if err != nil {
 		t.Fatalf("StartSQLite failed: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	// Verify that the database file was created
 	dbPath := filepath.Join(dataDir, "forge.db")

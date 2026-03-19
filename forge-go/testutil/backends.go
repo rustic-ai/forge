@@ -20,7 +20,7 @@ func SetupRedisBackend(t *testing.T) messaging.Backend {
 	t.Cleanup(func() { mr.Close() })
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 
 	return messaging.NewRedisBackend(rdb)
 }

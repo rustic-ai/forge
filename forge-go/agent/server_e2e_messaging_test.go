@@ -45,7 +45,7 @@ func awaitServerReady(t *testing.T, baseURL string, timeout time.Duration) {
 		if err != nil {
 			return false
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}, timeout, 100*time.Millisecond, "server at %s did not become ready within %s", baseURL, timeout)
 }
@@ -75,7 +75,7 @@ func TestStartServer_RedisBackend_MessagingPublishAndRetrieve(t *testing.T) {
 	// Create a parallel Redis backend pointing at the same miniredis to verify
 	// the server wired the Redis backend correctly and streams are writable.
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	backend := messaging.NewRedisBackend(rdb)
 
 	gen, err := protocol.NewGemstoneGenerator(10)
@@ -136,7 +136,7 @@ func TestStartServer_NATSBackend_MessagingPublishAndRetrieve(t *testing.T) {
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	gen, err := protocol.NewGemstoneGenerator(11)
 	require.NoError(t, err)

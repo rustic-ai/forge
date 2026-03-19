@@ -26,7 +26,7 @@ func pointerInt(i int) *int {
 
 func TestStore_GuildLifecycle(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// 1. Create Guild
 	guild := &store.GuildModel{
@@ -80,7 +80,7 @@ func TestStore_GuildLifecycle(t *testing.T) {
 
 func TestStore_AgentLifecycle(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	guild := &store.GuildModel{ID: "guild-abc", OrganizationID: "org-1"}
 	if err := db.CreateGuild(guild); err != nil {
@@ -121,7 +121,7 @@ func TestStore_AgentLifecycle(t *testing.T) {
 
 func TestStore_GuildWithRoutesAndAgents(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	guild := &store.GuildModel{
 		ID:             "guild-complex",
@@ -175,7 +175,7 @@ func TestStore_GuildWithRoutesAndAgents(t *testing.T) {
 
 func TestStore_NotFoundCases(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.GetGuild("missing-guild"); err != store.ErrNotFound {
 		t.Errorf("Expected ErrNotFound fetching missing guild, got: %v", err)
@@ -208,7 +208,7 @@ func TestStore_NotFoundCases(t *testing.T) {
 
 func TestStore_AgentDeleteLifecycle(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	guild := &store.GuildModel{ID: "guild-xyz", OrganizationID: "org-1"}
 	if err := db.CreateGuild(guild); err != nil {
@@ -253,7 +253,7 @@ func TestStore_AgentDeleteLifecycle(t *testing.T) {
 
 func TestStore_ModelDefaults_NoNilCollections(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	guild := &store.GuildModel{
 		ID:             "guild-defaults",

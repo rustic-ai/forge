@@ -27,7 +27,7 @@ func TestHandler_Integration(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	// 2. Setup Dependencies
@@ -137,7 +137,7 @@ func TestHandler_SpawnWithoutGuildStore_UsesFallback(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	regYaml := "entries:\n" +

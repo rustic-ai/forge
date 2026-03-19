@@ -86,7 +86,7 @@ func TestHandler_OrganizationScopedSupervisors(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	regYaml := `
@@ -168,7 +168,7 @@ func TestHandler_StopUsesRecordedOrganization(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	regYaml := `
@@ -241,7 +241,7 @@ func TestHandler_OrganizationResolutionPrecedence(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	reg := loadTestRegistry(t, `
@@ -254,7 +254,7 @@ entries:
 
 	dbStore, err := store.NewGormStore(store.DriverSQLite, filepath.Join(t.TempDir(), "org-precedence.db"))
 	require.NoError(t, err)
-	defer dbStore.Close()
+	defer func() { _ = dbStore.Close() }()
 	require.NoError(t, dbStore.CreateGuild(&store.GuildModel{
 		ID:             "guild-store",
 		Name:           "Guild Store",
@@ -377,7 +377,7 @@ func TestHandler_Integration_ProcessSupervisorsScopedByOrganization(t *testing.T
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	reg := loadTestRegistry(t, `

@@ -55,7 +55,7 @@ func TestEmbeddedNATSAt_ExplicitAddress(t *testing.T) {
 func TestEmbeddedNATSAt_FailsWhenOccupied(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	_, err = StartEmbeddedNATSAt(ln.Addr().String())
 	require.Error(t, err)

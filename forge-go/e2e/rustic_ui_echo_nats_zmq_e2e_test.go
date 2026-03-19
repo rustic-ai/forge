@@ -65,7 +65,7 @@ func TestE2E_RusticUIEchoLaunchSingleProcess_NATS_ZMQ(t *testing.T) {
 	wsID := getRusticUIWSID(t, client, server.rusticBase, guildID)
 
 	sysConn := openRusticUISocket(t, server.wsBase, wsID, "syscomms")
-	defer sysConn.Close()
+	defer func() { _ = sysConn.Close() }()
 
 	sysTranscript := &wsTranscript{}
 	userTranscript := &wsTranscript{}
@@ -74,7 +74,7 @@ func TestE2E_RusticUIEchoLaunchSingleProcess_NATS_ZMQ(t *testing.T) {
 	waitForRusticUIHealthOK(t, sysConn, sysTranscript, sysEvents, 90*time.Second)
 
 	userConn := openRusticUISocket(t, server.wsBase, wsID, "usercomms")
-	defer userConn.Close()
+	defer func() { _ = userConn.Close() }()
 	userEvents := startWSReader(userConn, userTranscript)
 
 	participants := waitForRusticUIParticipants(t, sysEvents, 60*time.Second)

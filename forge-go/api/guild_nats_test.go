@@ -71,7 +71,7 @@ filesystem:
 	mux.HandleFunc("POST /api/guilds/{id}/relaunch", srv.HandleRelaunchGuild)
 
 	cleanup := func() {
-		os.RemoveAll("conf")
+		_ = os.RemoveAll("conf")
 	}
 
 	return srv, controlPlane, statusStore, dbStore, mux, cleanup

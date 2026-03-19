@@ -23,13 +23,13 @@ func TestBootstrap_Flow_PersistsRoutesAndEnqueuesSpawn(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	db, err := store.NewGormStore(store.DriverSQLite, "file::memory:?cache=shared")
 	if err != nil {
 		t.Fatalf("create sqlite store: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	routeTimes := 1
 	spec := &protocol.GuildSpec{
@@ -133,13 +133,13 @@ func TestBootstrap_Flow_NormalizesSpawnedGuildSpecIDs(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	db, err := store.NewGormStore(store.DriverSQLite, "file::memory:?cache=shared")
 	if err != nil {
 		t.Fatalf("create sqlite store: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	spec := &protocol.GuildSpec{
 		Name:        "Bootstrap ID Normalize",
@@ -219,13 +219,13 @@ func TestBootstrap_Flow_PersistsResolvedFilesystemPathBase(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	db, err := store.NewGormStore(store.DriverSQLite, "file::memory:?cache=shared")
 	if err != nil {
 		t.Fatalf("create sqlite store: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	globalRoot := filepath.Join(t.TempDir(), "workspaces")
 	t.Setenv(forgeFilesystemGlobalRootEnv, globalRoot)
@@ -342,13 +342,13 @@ func TestBootstrap_Flow_PersistsResolvedS3FilesystemPathBase(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	db, err := store.NewGormStore(store.DriverSQLite, "file::memory:?cache=shared")
 	if err != nil {
 		t.Fatalf("create sqlite store: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	t.Setenv(forgeFilesystemGlobalRootEnv, "s3://forge-bucket/root")
 

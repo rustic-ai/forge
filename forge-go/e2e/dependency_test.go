@@ -29,7 +29,7 @@ func TestLevel2_FileDependencyIntegration(t *testing.T) {
 	defer s.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	ctx := context.Background()
 
 	// 2. Setup a temporary directory for the dependency

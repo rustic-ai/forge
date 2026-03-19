@@ -272,7 +272,7 @@ func postJSON(
 	}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return respBody, resp.StatusCode
@@ -512,8 +512,8 @@ func TestE2ELadder_BackendDirectEcho(t *testing.T) {
 	waitGuildRunning(t, client, h.apiBase, guildID, 2*time.Minute)
 
 	userConn, sysConn := openBackendSockets(t, guildID)
-	defer userConn.Close()
-	defer sysConn.Close()
+	defer func() { _ = userConn.Close() }()
+	defer func() { _ = sysConn.Close() }()
 
 	userTr := &wsTranscript{}
 	sysTr := &wsTranscript{}
@@ -544,8 +544,8 @@ func TestE2ELadder_ProxyEcho(t *testing.T) {
 
 	wsID := getProxyWSID(t, client, guildID)
 	userConn, sysConn := openProxySockets(t, client, wsID)
-	defer userConn.Close()
-	defer sysConn.Close()
+	defer func() { _ = userConn.Close() }()
+	defer func() { _ = sysConn.Close() }()
 
 	userTr := &wsTranscript{}
 	sysTr := &wsTranscript{}
@@ -585,8 +585,8 @@ func TestE2ELadder_GoldenUIProxyEcho(t *testing.T) {
 
 	wsID := getProxyWSID(t, client, guildID)
 	userConn, sysConn := openProxySockets(t, client, wsID)
-	defer userConn.Close()
-	defer sysConn.Close()
+	defer func() { _ = userConn.Close() }()
+	defer func() { _ = sysConn.Close() }()
 
 	userTr := &wsTranscript{}
 	sysTr := &wsTranscript{}

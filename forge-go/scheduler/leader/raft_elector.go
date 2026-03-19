@@ -85,7 +85,7 @@ func (f *dummyFSM) Restore(rc io.ReadCloser) error      { return nil }
 
 type dummySnapshot struct{}
 
-func (s *dummySnapshot) Persist(sink raft.SnapshotSink) error { sink.Close(); return nil }
+func (s *dummySnapshot) Persist(sink raft.SnapshotSink) error { _ = sink.Close(); return nil }
 func (s *dummySnapshot) Release()                             {}
 
 func NewRaftElector(cfg RaftConfig) (*RaftElector, error) {

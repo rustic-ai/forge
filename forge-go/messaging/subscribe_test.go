@@ -23,7 +23,7 @@ func TestSubscriptionDelivery(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	client := messaging.NewClient(rdb)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -36,7 +36,7 @@ func TestSubscriptionDelivery(t *testing.T) {
 	// 1. Subscribe
 	sub, err := client.Subscribe(ctx, ns, topic)
 	require.NoError(t, err)
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 
 	// 2. Publish a message
 	gen, _ := protocol.NewGemstoneGenerator(1)
@@ -76,7 +76,7 @@ func TestSubscriptionGracefulShutdown(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	client := messaging.NewClient(rdb)
 	ctx := context.Background()

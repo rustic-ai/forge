@@ -89,7 +89,7 @@ func userCommsHandler(msgClient messaging.Backend, guildStore store.Store, gemGe
 			logger.Error("failed to upgrade connection", "err", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		logger.Info("User socket connected", "guild", guildID, "user", userID, "name", userName)
 
@@ -98,7 +98,7 @@ func userCommsHandler(msgClient messaging.Backend, guildStore store.Store, gemGe
 			logger.Error("Failed to subscribe", "err", err)
 			return
 		}
-		defer sub.Close()
+		defer func() { _ = sub.Close() }()
 
 		creationGemID, _ := gemGen.Generate(protocol.PriorityNormal)
 
@@ -120,7 +120,7 @@ func userCommsHandler(msgClient messaging.Backend, guildStore store.Store, gemGe
 			for subMsg := range sub.Channel() {
 				m := subMsg.Message
 
-				var spanCtx context.Context = ctx
+				spanCtx := ctx
 				if m.Traceparent != nil && *m.Traceparent != "" && *m.Traceparent != noTracing {
 					carrier := propagation.MapCarrier{"traceparent": *m.Traceparent}
 					spanCtx = otel.GetTextMapPropagator().Extract(context.Background(), carrier)

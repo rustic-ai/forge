@@ -8,10 +8,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 
+	"github.com/rustic-ai/forge/forge-go/forgepath"
 	"github.com/rustic-ai/forge/forge-go/guild"
 	"github.com/rustic-ai/forge/forge-go/guild/store"
 	"github.com/rustic-ai/forge/forge-go/protocol"
@@ -24,11 +24,7 @@ type CreateGuildRequest struct {
 }
 
 func dependencyConfigPath() string {
-	path := os.Getenv("FORGE_DEPENDENCY_CONFIG")
-	if path == "" {
-		return "./conf/agent-dependencies.yaml"
-	}
-	return path
+	return forgepath.DependencyConfigPath()
 }
 
 func (s *Server) HandleCreateGuild(w http.ResponseWriter, r *http.Request) {

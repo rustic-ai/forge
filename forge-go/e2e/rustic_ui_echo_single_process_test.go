@@ -19,6 +19,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"github.com/rustic-ai/forge/forge-go/forgepath"
 	"github.com/stretchr/testify/require"
 )
 
@@ -112,7 +113,7 @@ func TestE2E_RusticUIEchoLaunchSingleProcess(t *testing.T) {
 	wsID := getRusticUIWSID(t, client, server.rusticBase, guildID)
 
 	sysConn := openRusticUISocket(t, server.wsBase, wsID, "syscomms")
-	defer sysConn.Close()
+	defer func() { _ = sysConn.Close() }()
 
 	sysTranscript := &wsTranscript{}
 	userTranscript := &wsTranscript{}
@@ -121,7 +122,7 @@ func TestE2E_RusticUIEchoLaunchSingleProcess(t *testing.T) {
 	waitForRusticUIHealthOK(t, sysConn, sysTranscript, sysEvents, 90*time.Second)
 
 	userConn := openRusticUISocket(t, server.wsBase, wsID, "usercomms")
-	defer userConn.Close()
+	defer func() { _ = userConn.Close() }()
 	userEvents := startWSReader(userConn, userTranscript)
 
 	participants := waitForRusticUIParticipants(t, sysEvents, 60*time.Second)
@@ -159,7 +160,7 @@ func startSingleProcessForgeServer(t *testing.T, binPath, forgeRoot string, nats
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
 
 	registryPath := filepath.Join(forgeRoot, "forge-go", "conf", "forge-agent-registry.yaml")
-	dependencyConfigPath := filepath.Join(forgeRoot, "forge-go", "conf", "agent-dependencies.yaml")
+	dependencyConfigPath := filepath.Join(forgeRoot, "forge-go", forgepath.DefaultDependencyConfigPath)
 	forgePythonPath := filepath.Join(forgeRoot, "forge-python")
 
 	args := []string{
@@ -229,7 +230,7 @@ func startSingleProcessForgeServer(t *testing.T, binPath, forgeRoot string, nats
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("readyz returned %d", resp.StatusCode)
 		}
@@ -243,7 +244,7 @@ func startSingleProcessForgeServer(t *testing.T, binPath, forgeRoot string, nats
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("nodes returned %d", resp.StatusCode)
 		}
@@ -575,7 +576,7 @@ func assertGuildAgentProcesses(t *testing.T, redisAddr, guildID string, expected
 	sort.Strings(expectedAgentIDs)
 
 	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	ctx := context.Background()
 	var statuses map[string]agentStatusSnapshot
@@ -767,7 +768,7 @@ func getJSONMap(t *testing.T, client *http.Client, rawURL string) map[string]int
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -786,7 +787,7 @@ func getJSONArray(t *testing.T, client *http.Client, rawURL string) []map[string
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -806,7 +807,7 @@ func postRawJSON(t *testing.T, client *http.Client, rawURL string, body []byte) 
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)

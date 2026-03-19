@@ -27,7 +27,7 @@ func TestAgentRegistry(t *testing.T) {
 
 		var agents map[string]AgentRegistryEntry
 		err = json.NewDecoder(res.Body).Decode(&agents)
-		res.Body.Close()
+		_ = res.Body.Close()
 
 		assert.NoError(t, err)
 		assert.GreaterOrEqual(t, len(agents), 3)
@@ -43,7 +43,7 @@ func TestAgentRegistry(t *testing.T) {
 
 		var agent AgentRegistryEntry
 		err = json.NewDecoder(res.Body).Decode(&agent)
-		res.Body.Close()
+		_ = res.Body.Close()
 
 		assert.NoError(t, err)
 		assert.Equal(t, "GuildManagerAgent", agent.AgentName)

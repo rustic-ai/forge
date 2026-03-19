@@ -26,7 +26,7 @@ func TestStartClient_ConsumesNodeQueueAndLaunches(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /nodes/register", func(w http.ResponseWriter, r *http.Request) {

@@ -126,7 +126,7 @@ func applySQLitePragmas(db *sql.DB, dsn string) error {
 }
 
 func runSchemaParityMigrations(db *gorm.DB) error {
-	if db.Dialector.Name() != DriverPostgres {
+	if db.Name() != DriverPostgres {
 		return nil
 	}
 

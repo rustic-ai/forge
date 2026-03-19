@@ -10,7 +10,7 @@ import (
 
 func TestStore_UpdateGuildRouteStatus(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	guild := &store.GuildModel{ID: "g-route", Name: "G", OrganizationID: "org"}
 	require.NoError(t, db.CreateGuild(guild))
@@ -30,7 +30,7 @@ func TestStore_UpdateGuildRouteStatus(t *testing.T) {
 
 func TestStore_ProcessHeartbeatStatus(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	guildID := "g-heartbeat"
 	require.NoError(t, db.CreateGuild(&store.GuildModel{ID: guildID, Name: "HB", OrganizationID: "org"}))

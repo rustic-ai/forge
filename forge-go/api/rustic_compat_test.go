@@ -77,13 +77,13 @@ func TestRusticMessagesRoute_ShapesLegacyEnvelope(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	msgClient := messaging.NewClient(rdb)
 	dbPath := filepath.Join(t.TempDir(), "rustic-compat.db")
 	dbStore, err := store.NewGormStore(store.DriverSQLite, dbPath)
 	require.NoError(t, err)
-	defer dbStore.Close()
+	defer func() { _ = dbStore.Close() }()
 
 	s := NewServer(dbStore, supervisor.NewRedisAgentStatusStore(rdb), control.NewRedisControlTransport(rdb), msgClient, nil, ":0")
 	router := s.buildRouter()

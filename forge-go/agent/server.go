@@ -43,13 +43,13 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 	_ = os.Setenv("FORGE_DATABASE_URL", cfg.DatabaseURL)
 	_ = os.Setenv("FORGE_MANAGER_API_BASE_URL", deriveManagerAPIBaseURL(cfg.ListenAddress, cfg.ManagerAPIBaseURL))
 	if strings.TrimSpace(cfg.DependencyConfig) != "" {
-		_ = os.Setenv("FORGE_DEPENDENCY_CONFIG", cfg.DependencyConfig)
+		_ = os.Setenv(forgepath.DependencyConfigEnv, cfg.DependencyConfig)
 	}
 	db, err := store.NewGormStore(driverName, dbDSN)
 	if err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Determine backend and start only the required embedded servers.
 	backend := strings.ToLower(strings.TrimSpace(cfg.Backend))
@@ -118,7 +118,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 
 	defer func() {
 		if redisClient != nil {
-			redisClient.Close()
+			_ = redisClient.Close()
 		}
 	}()
 

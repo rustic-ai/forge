@@ -45,7 +45,7 @@ func TestNATSPublishAndRetrieveMessages(t *testing.T) {
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	ctx := context.Background()
 
@@ -93,7 +93,7 @@ func TestNATSGetMessagesSince(t *testing.T) {
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	ctx := context.Background()
 
@@ -139,7 +139,7 @@ func TestNATSGetMessagesByID(t *testing.T) {
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	ctx := context.Background()
 

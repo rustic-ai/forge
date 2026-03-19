@@ -56,7 +56,7 @@ func TestEmbeddedRedisAt_ExplicitAddress(t *testing.T) {
 func TestEmbeddedRedisAt_FailsWhenAddressOccupied(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	_, err = StartEmbeddedRedisAt(ln.Addr().String())
 	require.Error(t, err)

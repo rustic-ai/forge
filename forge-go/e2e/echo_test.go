@@ -80,7 +80,7 @@ func TestLevel1_EchoAgentIntegration(t *testing.T) {
 			rdb := redis.NewClient(&redis.Options{
 				Addr: mr.Addr(),
 			})
-			defer rdb.Close()
+			defer func() { _ = rdb.Close() }()
 			// Update guild configuration dynamically to point to our InMemory backend
 			if guildSpec.Properties == nil {
 				guildSpec.Properties = make(map[string]interface{})

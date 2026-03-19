@@ -11,8 +11,8 @@ func TestEnvSecretProvider(t *testing.T) {
 	p := NewEnvSecretProvider()
 	ctx := context.Background()
 
-	os.Setenv("TEST_SECRET_ENV", "env_value")
-	defer os.Unsetenv("TEST_SECRET_ENV")
+	_ = os.Setenv("TEST_SECRET_ENV", "env_value")
+	defer func() { _ = os.Unsetenv("TEST_SECRET_ENV") }()
 
 	val, err := p.Resolve(ctx, "TEST_SECRET_ENV")
 	if err != nil {
@@ -78,8 +78,8 @@ func TestChainSecretProvider(t *testing.T) {
 	}
 
 	// Now set ENV var, which should take precedence
-	os.Setenv("SHARED_KEY", "env_wins")
-	defer os.Unsetenv("SHARED_KEY")
+	_ = os.Setenv("SHARED_KEY", "env_wins")
+	defer func() { _ = os.Unsetenv("SHARED_KEY") }()
 
 	val2, err := chain1.Resolve(ctx, "SHARED_KEY")
 	if err != nil {
@@ -164,8 +164,8 @@ func TestDefaultProvider_PreferenceOrder(t *testing.T) {
 		t.Fatalf("Expected dotenv_value before file fallback, got %s", val)
 	}
 
-	os.Setenv("SHARED_KEY", "env_value")
-	defer os.Unsetenv("SHARED_KEY")
+	_ = os.Setenv("SHARED_KEY", "env_value")
+	defer func() { _ = os.Unsetenv("SHARED_KEY") }()
 
 	val, err = provider.Resolve(ctx, "SHARED_KEY")
 	if err != nil {

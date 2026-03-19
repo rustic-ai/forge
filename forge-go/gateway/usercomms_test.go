@@ -52,8 +52,8 @@ func setupTestServer(t *testing.T) (*miniredis.Miniredis, *redis.Client, *messag
 func TestUserCommsIngressMutation(t *testing.T) {
 	mr, rdb, _, dbStore, server := setupTestServer(t)
 	defer mr.Close()
-	defer rdb.Close()
-	defer dbStore.Close()
+	defer func() { _ = rdb.Close() }()
+	defer func() { _ = dbStore.Close() }()
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/guilds/g1/usercomms/u1/Alice"
@@ -61,7 +61,7 @@ func TestUserCommsIngressMutation(t *testing.T) {
 	// 1. Connect Client
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait brief moment for the System Announce message
 	time.Sleep(50 * time.Millisecond)
@@ -154,8 +154,8 @@ func TestUserCommsIngressMutation(t *testing.T) {
 func TestUserCommsEgressOnlyUserNotifications(t *testing.T) {
 	mr, rdb, msgClient, dbStore, server := setupTestServer(t)
 	defer mr.Close()
-	defer rdb.Close()
-	defer dbStore.Close()
+	defer func() { _ = rdb.Close() }()
+	defer func() { _ = dbStore.Close() }()
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/guilds/g1/usercomms/u1/Alice"
@@ -163,7 +163,7 @@ func TestUserCommsEgressOnlyUserNotifications(t *testing.T) {
 	// 1. Connect Client
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Wait for subscription confirmation
 	time.Sleep(100 * time.Millisecond)
@@ -227,8 +227,8 @@ func TestUserCommsEgressOnlyUserNotifications(t *testing.T) {
 func TestUserCommsRejectsUnknownGuild(t *testing.T) {
 	mr, rdb, _, dbStore, server := setupTestServer(t)
 	defer mr.Close()
-	defer rdb.Close()
-	defer dbStore.Close()
+	defer func() { _ = rdb.Close() }()
+	defer func() { _ = dbStore.Close() }()
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/guilds/unknown/usercomms/u1/Alice"
@@ -244,14 +244,14 @@ func TestUserCommsRejectsUnknownGuild(t *testing.T) {
 func TestUserCommsDropsInvalidMessageHistory(t *testing.T) {
 	mr, rdb, _, dbStore, server := setupTestServer(t)
 	defer mr.Close()
-	defer rdb.Close()
-	defer dbStore.Close()
+	defer func() { _ = rdb.Close() }()
+	defer func() { _ = dbStore.Close() }()
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/guilds/g1/usercomms/u1/Alice"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	rawMsg := map[string]interface{}{
 		"format": "rustic_ai.core.guild.agent_ext.depends.llm.models.ChatCompletionRequest",

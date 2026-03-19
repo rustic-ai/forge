@@ -23,7 +23,7 @@ func TestPublishAndRetrieveMessages(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	client := messaging.NewClient(rdb)
 	ctx := context.Background()
@@ -91,7 +91,7 @@ func TestGetMessagesSince(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	client := messaging.NewClient(rdb)
 	ctx := context.Background()

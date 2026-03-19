@@ -90,7 +90,7 @@ func bridgeRoundTrip(t *testing.T, backend messaging.Backend) {
 	sock := zmq4.NewPair(ctx, zmq4.WithAutomaticReconnect(false))
 	err = sock.Dial(bridge.Endpoint())
 	require.NoError(t, err, "dial bridge endpoint")
-	defer sock.Close()
+	defer func() { _ = sock.Close() }()
 
 	// Small delay for ZMQ handshake
 	time.Sleep(50 * time.Millisecond)
@@ -258,10 +258,10 @@ func TestBridgeRoundTrip_Redis(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	backend := messaging.NewRedisBackend(rdb)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	bridgeRoundTrip(t, backend)
 }
@@ -292,7 +292,7 @@ func TestBridgeRoundTrip_NATS(t *testing.T) {
 
 	backend, err := messaging.NewNATSBackend(nc)
 	require.NoError(t, err)
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	bridgeRoundTrip(t, backend)
 }

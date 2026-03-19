@@ -53,7 +53,7 @@ func (p *ProbeAgent) Subscribe(ctx context.Context, topic string) <-chan *Messag
 	ch := make(chan *Message, 100)
 
 	go func() {
-		defer pubsub.Close()
+		defer func() { _ = pubsub.Close() }()
 		defer close(ch)
 		for {
 			select {
