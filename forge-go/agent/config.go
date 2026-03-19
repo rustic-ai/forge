@@ -42,4 +42,5 @@ type ClientConfig struct {
 	DefaultTransport  string
 	ZMQBridgeMode     string
 	AttachProcessTree bool
+	StopAgentsOnExit  bool
 }

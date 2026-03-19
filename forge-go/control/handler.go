@@ -35,8 +35,9 @@ type ControlQueueHandler struct {
 	store       store.Store
 	listener    *ControlQueueListener
 	responder   *ControlQueueResponder
-	statusStore supervisor.AgentStatusStore
-	nodeID      string
+	statusStore      supervisor.AgentStatusStore
+	nodeID           string
+	stopAgentsOnExit bool
 }
 
 // NewControlQueueHandler creates a fully integrated control handler.
@@ -102,6 +103,12 @@ func WithNodeID(id string) HandlerOption {
 	return func(h *ControlQueueHandler) { h.nodeID = id }
 }
 
+// WithStopAgentsOnExit controls whether Stop() terminates all managed agents.
+// When false (default), Stop() only halts the listener — agents keep running.
+func WithStopAgentsOnExit(v bool) HandlerOption {
+	return func(h *ControlQueueHandler) { h.stopAgentsOnExit = v }
+}
+
 func newControlQueueHandler(
 	cp ControlPlane,
 	reg *registry.Registry,
@@ -143,9 +150,14 @@ func (h *ControlQueueHandler) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop terminates the background listener blocking routine
+// Stop terminates the background listener blocking routine.
+// If stopAgentsOnExit is false (the default for standalone clients),
+// only the listener is stopped — agents keep running across client restarts.
 func (h *ControlQueueHandler) Stop() {
 	h.listener.Stop()
+	if !h.stopAgentsOnExit {
+		return
+	}
 	if h.supFactory == nil {
 		return
 	}

@@ -169,6 +169,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 	queueHandler := control.NewControlQueueHandlerWithQueueFactory(controlPlane, reg, sec, supervisorFactory, nil, nodeQueueKey,
 		control.WithStatusStore(statusStore),
 		control.WithNodeID(config.NodeID),
+		control.WithStopAgentsOnExit(config.StopAgentsOnExit),
 	)
 	if err := queueHandler.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start node queue listener: %w", err)

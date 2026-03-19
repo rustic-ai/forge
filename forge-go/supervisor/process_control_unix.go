@@ -54,6 +54,13 @@ func terminateProcessTree(pid int, detach bool) error {
 		} else {
 			_ = syscall.Kill(pid, syscall.SIGKILL)
 		}
+		// Wait briefly for the process to actually exit after SIGKILL.
+		for i := 0; i < 10; i++ {
+			if syscall.Kill(pid, 0) != nil {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
 
 	return nil

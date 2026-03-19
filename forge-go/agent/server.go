@@ -338,7 +338,8 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 			DefaultSupervisor: cfg.ClientDefaultSupervisor,
 			DefaultTransport:  cfg.ClientDefaultTransport,
 			ZMQBridgeMode:     cfg.ClientZMQBridgeMode,
-			AttachProcessTree: cfg.ClientAttachProcessTree,
+			AttachProcessTree: true, // Embedded client: attach for reliable cleanup
+			StopAgentsOnExit:  true, // Embedded client: kill agents on server exit
 		}
 		l.Info("In-process Forge client enabled",
 			"server_url", clientServerURL,
