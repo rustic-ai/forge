@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,9 +28,14 @@ func StartEmbeddedNATS() (*EmbeddedNATS, error) {
 // StartEmbeddedNATSAt spins up a new in-process NATS server on a specific address.
 // If addr is empty, an ephemeral port is used.
 func StartEmbeddedNATSAt(addr string) (*EmbeddedNATS, error) {
-	storeDir := forgepath.Resolve("nats")
-	if err := os.MkdirAll(storeDir, 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create NATS store dir %s: %w", storeDir, err)
+	storeRoot, err := resolveEmbeddedNATSStoreRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	storeDir, err := os.MkdirTemp(storeRoot, "embedded-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create embedded NATS store dir under %s: %w", storeRoot, err)
 	}
 
 	opts := &natsserver.Options{
@@ -54,16 +60,36 @@ func StartEmbeddedNATSAt(addr string) (*EmbeddedNATS, error) {
 
 	s, err := natsserver.NewServer(opts)
 	if err != nil {
+		_ = os.RemoveAll(storeDir)
 		return nil, fmt.Errorf("failed to create embedded NATS server: %w", err)
 	}
 
 	go s.Start()
 
-	if !s.ReadyForConnections(5 * time.Second) {
-		return nil, fmt.Errorf("embedded NATS server did not become ready within 5s")
+	if !s.ReadyForConnections(15 * time.Second) {
+		s.Shutdown()
+		_ = os.RemoveAll(storeDir)
+		return nil, fmt.Errorf("embedded NATS server did not become ready within 15s")
 	}
 
 	return &EmbeddedNATS{server: s, storeDir: storeDir}, nil
+}
+
+func resolveEmbeddedNATSStoreRoot() (string, error) {
+	storeRoot := forgepath.Resolve("nats")
+	if err := os.MkdirAll(storeRoot, 0o755); err == nil {
+		probeDir, probeErr := os.MkdirTemp(storeRoot, ".probe-*")
+		if probeErr == nil {
+			_ = os.RemoveAll(probeDir)
+			return storeRoot, nil
+		}
+	}
+
+	fallbackRoot, err := os.MkdirTemp("", "forge-nats-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create NATS store dir %s and fallback temp dir: %w", storeRoot, err)
+	}
+	return fallbackRoot, nil
 }
 
 // Host returns the bound hostname.
@@ -92,10 +118,12 @@ func (e *EmbeddedNATS) Client() (*nats.Conn, error) {
 	return nats.Connect(e.ClientURL())
 }
 
-// Close shuts down the embedded server. The JetStream store directory under
-// forge-home is preserved across restarts.
+// Close shuts down the embedded server and removes its isolated JetStream store directory.
 func (e *EmbeddedNATS) Close() {
 	if e.server != nil {
 		e.server.Shutdown()
+	}
+	if e.storeDir != "" {
+		_ = os.RemoveAll(filepath.Clean(e.storeDir))
 	}
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/rustic-ai/forge/forge-go/control"
 	"github.com/rustic-ai/forge/forge-go/helper/logging"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/scheduler"
@@ -164,11 +165,16 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		}
 	}
 	sec := secrets.DefaultProvider()
-	supervisorFactory := buildOrgSupervisorFactory(statusStore, config.DefaultSupervisor, config.DefaultTransport, msgBackend, config.DataDir, config.AttachProcessTree, config.ZMQBridgeMode)
+	infraPublisher, err := infraevents.NewPublisher(msgBackend)
+	if err != nil {
+		return fmt.Errorf("failed to create infra event publisher: %w", err)
+	}
+	supervisorFactory := buildOrgSupervisorFactory(statusStore, config.DefaultSupervisor, config.DefaultTransport, msgBackend, infraPublisher, config.DataDir, config.AttachProcessTree, config.ZMQBridgeMode)
 	nodeQueueKey := "forge:control:node:" + config.NodeID
 	queueHandler := control.NewControlQueueHandlerWithQueueFactory(controlPlane, reg, sec, supervisorFactory, nil, nodeQueueKey,
 		control.WithStatusStore(statusStore),
 		control.WithNodeID(config.NodeID),
+		control.WithInfraEventPublisher(infraPublisher),
 		control.WithStopAgentsOnExit(config.StopAgentsOnExit),
 	)
 	if err := queueHandler.Start(ctx); err != nil {

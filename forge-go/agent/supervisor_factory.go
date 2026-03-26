@@ -2,6 +2,7 @@ package agent
 
 import (
 	"github.com/rustic-ai/forge/forge-go/control"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/supervisor"
 )
@@ -11,6 +12,7 @@ func buildOrgSupervisorFactory(
 	defaultSupervisor string,
 	defaultTransport string,
 	msgBackend messaging.Backend,
+	infraPublisher *infraevents.Publisher,
 	dataDir string,
 	attachProcessTree bool,
 	zmqBridgeMode string,
@@ -23,6 +25,7 @@ func buildOrgSupervisorFactory(
 			supervisor.WithWorkDirBase(dataDir),
 			supervisor.WithDefaultAgentTransport(defaultTransport),
 			supervisor.WithMessagingBackend(msgBackend),
+			supervisor.WithInfraEventPublisher(infraPublisher),
 		}
 		if attachProcessTree {
 			opts = append(opts, supervisor.WithAttachedProcessTree())

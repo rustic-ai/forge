@@ -12,6 +12,7 @@ import (
 	"github.com/rustic-ai/forge/forge-go/filesystem"
 	"github.com/rustic-ai/forge/forge-go/gateway"
 	"github.com/rustic-ai/forge/forge-go/guild/store"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/supervisor"
@@ -20,25 +21,31 @@ import (
 type Server struct {
 	contract.UnimplementedServer
 
-	store         store.Store
-	statusStore   supervisor.AgentStatusStore
-	controlPusher protocol.ControlPusher
-	msgClient     messaging.Backend
-	fileStore     *filesystem.LocalFileStore
-	localUI       *localUIState
-	listenAddr    string
-	server        *http.Server
+	store          store.Store
+	statusStore    supervisor.AgentStatusStore
+	controlPusher  protocol.ControlPusher
+	msgClient      messaging.Backend
+	infraPublisher *infraevents.Publisher
+	fileStore      *filesystem.LocalFileStore
+	localUI        *localUIState
+	listenAddr     string
+	server         *http.Server
 }
 
 func NewServer(db store.Store, statusStore supervisor.AgentStatusStore, controlPusher protocol.ControlPusher, mc messaging.Backend, fs *filesystem.LocalFileStore, listenAddr string) *Server {
+	var infraPublisher *infraevents.Publisher
+	if mc != nil {
+		infraPublisher, _ = infraevents.NewPublisher(mc)
+	}
 	return &Server{
-		store:         db,
-		statusStore:   statusStore,
-		controlPusher: controlPusher,
-		msgClient:     mc,
-		fileStore:     fs,
-		localUI:       newLocalUIState(),
-		listenAddr:    listenAddr,
+		store:          db,
+		statusStore:    statusStore,
+		controlPusher:  controlPusher,
+		msgClient:      mc,
+		infraPublisher: infraPublisher,
+		fileStore:      fs,
+		localUI:        newLocalUIState(),
+		listenAddr:     listenAddr,
 	}
 }
 

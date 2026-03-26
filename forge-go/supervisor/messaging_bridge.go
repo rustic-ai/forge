@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -111,7 +112,7 @@ func NewAgentMessagingBridgeWithMode(
 
 	default: // IPC
 		mode = BridgeTransportIPC
-		socketDir := filepath.Join(os.TempDir(), "forge-zmq")
+		socketDir := resolveBridgeSocketDir()
 		if err := os.MkdirAll(socketDir, 0o700); err != nil {
 			cancel()
 			return nil, fmt.Errorf("create bridge socket dir: %w", err)
@@ -154,6 +155,17 @@ func bridgeSocketPath(socketDir, guildID, agentID, workDir string) string {
 		prefix = prefix[:16]
 	}
 	return filepath.Join(socketDir, fmt.Sprintf("%s-%x.sock", prefix, digest[:8]))
+}
+
+func resolveBridgeSocketDir() string {
+	if override := strings.TrimSpace(os.Getenv("FORGE_ZMQ_DIR")); override != "" {
+		return override
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.TempDir(), "forge-zmq")
+	}
+	// Keep IPC socket paths short; long TMPDIR-derived paths can exceed unix socket limits.
+	return "/tmp/forge-zmq"
 }
 
 func (b *AgentMessagingBridge) Endpoint() string {

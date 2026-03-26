@@ -63,7 +63,7 @@ func sysCommsHandler(msgClient messaging.Backend, guildStore store.Store, gemGen
 
 		socketSenderID := fmt.Sprintf("sys_comms_socket:%s", userID)
 
-		sub, err := msgClient.Subscribe(ctx, guildID, userSystemNotificationsTopic(userID), guildStatusTopic)
+		sub, err := msgClient.Subscribe(ctx, guildID, userSystemNotificationsTopic(userID), guildStatusTopic, infraEventsTopic)
 		if err != nil {
 			logger.Error("Failed to subscribe syscomms", "err", err)
 			return

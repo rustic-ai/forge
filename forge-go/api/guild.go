@@ -14,6 +14,7 @@ import (
 	"github.com/rustic-ai/forge/forge-go/forgepath"
 	"github.com/rustic-ai/forge/forge-go/guild"
 	"github.com/rustic-ai/forge/forge-go/guild/store"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/supervisor"
 )
@@ -43,7 +44,16 @@ func (s *Server) HandleCreateGuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	model, err := guild.Bootstrap(r.Context(), s.store, s.controlPusher, req.Spec, req.OrganizationID, dependencyConfigPath())
+	_ = s.infraPublisher.Emit(r.Context(), infraevents.EmitParams{
+		Kind:            "guild.launch.requested",
+		Severity:        infraevents.SeverityInfo,
+		GuildID:         req.Spec.ID,
+		OrganizationID:  req.OrganizationID,
+		SourceComponent: "forge-go.api",
+		Message:         "guild launch requested",
+	})
+
+	model, err := guild.Bootstrap(r.Context(), s.store, s.controlPusher, s.infraPublisher, req.Spec, req.OrganizationID, dependencyConfigPath())
 	if err != nil {
 		ReplyError(w, http.StatusInternalServerError, "failed to bootstrap guild: "+err.Error())
 		return
@@ -85,7 +95,7 @@ func (s *Server) HandleRelaunchGuild(w http.ResponseWriter, r *http.Request) {
 		}
 
 		spec := store.ToGuildSpec(guildModel)
-		if err := guild.EnqueueGuildManagerSpawn(r.Context(), s.controlPusher, spec, guildModel.OrganizationID); err != nil {
+		if err := guild.EnqueueGuildManagerSpawn(r.Context(), s.controlPusher, s.infraPublisher, spec, guildModel.OrganizationID); err != nil {
 			ReplyError(w, http.StatusInternalServerError, "failed to enqueue relaunch")
 			return
 		}

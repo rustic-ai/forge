@@ -19,6 +19,7 @@ import (
 
 	"github.com/rustic-ai/forge/forge-go/gateway"
 	"github.com/rustic-ai/forge/forge-go/guild/store"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 )
@@ -248,6 +249,27 @@ func TestSysCommsEgressPassthrough(t *testing.T) {
 
 	assert.Equal(t, id2.ToInt(), readMsg2.ID)
 	assert.Equal(t, `"guild_broadcast"`, string(readMsg2.Payload))
+
+	id3, _ := gen.Generate(protocol.PriorityNormal)
+	infraMsg := &protocol.Message{
+		ID:      id3.ToInt(),
+		Format:  infraevents.Format,
+		Payload: json.RawMessage(`{"kind":"agent.process.started"}`),
+	}
+
+	err = msgClient.PublishMessage(ctx, "g1", infraevents.Topic, infraMsg)
+	require.NoError(t, err)
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, p3, err := conn.ReadMessage()
+	require.NoError(t, err)
+
+	var readMsg3 protocol.Message
+	err = json.Unmarshal(p3, &readMsg3)
+	require.NoError(t, err)
+	assert.Equal(t, id3.ToInt(), readMsg3.ID)
+	assert.Equal(t, infraevents.Format, readMsg3.Format)
+	assert.Equal(t, `{"kind":"agent.process.started"}`, string(readMsg3.Payload))
 }
 
 func TestSysCommsIngressDropsMessagesMissingFormatOrPayload(t *testing.T) {

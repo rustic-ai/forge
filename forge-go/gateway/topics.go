@@ -3,6 +3,7 @@ package gateway
 import (
 	"fmt"
 
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"go.opentelemetry.io/otel"
 )
 
@@ -10,6 +11,7 @@ const (
 	noTracing             = "no_tracing"
 	systemTopic           = "system_topic"
 	guildStatusTopic      = "guild_status_topic"
+	infraEventsTopic      = infraevents.Topic
 	userMessageBroadcast  = "user_message_broadcast"
 	userProxyCreateFmt    = "rustic_ai.core.agents.system.models.UserAgentCreationRequest"
 	messageWrapperFmt     = "rustic_ai.core.messaging.core.message.Message"

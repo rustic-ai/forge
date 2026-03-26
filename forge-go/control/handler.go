@@ -12,6 +12,7 @@ import (
 
 	"github.com/rustic-ai/forge/forge-go/guild/store"
 	"github.com/rustic-ai/forge/forge-go/helper/envvars"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/secrets"
@@ -24,17 +25,18 @@ type SupervisorFactory func(orgID string) supervisor.AgentSupervisor
 
 // ControlQueueHandler wiring layer connecting the control transport to the localized ProcessSupervisor.
 type ControlQueueHandler struct {
-	registry    *registry.Registry
-	secrets     secrets.SecretProvider
-	sup         supervisor.AgentSupervisor
-	supByOrg    map[string]supervisor.AgentSupervisor
-	supMu       sync.RWMutex
-	supFactory  SupervisorFactory
-	agentOrg    map[string]string
-	agentMu     sync.RWMutex
-	store       store.Store
-	listener    *ControlQueueListener
-	responder   *ControlQueueResponder
+	registry         *registry.Registry
+	secrets          secrets.SecretProvider
+	sup              supervisor.AgentSupervisor
+	supByOrg         map[string]supervisor.AgentSupervisor
+	supMu            sync.RWMutex
+	supFactory       SupervisorFactory
+	agentOrg         map[string]string
+	agentMu          sync.RWMutex
+	store            store.Store
+	listener         *ControlQueueListener
+	responder        *ControlQueueResponder
+	infraPublisher   *infraevents.Publisher
 	statusStore      supervisor.AgentStatusStore
 	nodeID           string
 	stopAgentsOnExit bool
@@ -101,6 +103,10 @@ func WithStatusStore(ss supervisor.AgentStatusStore) HandlerOption {
 // WithNodeID sets the node identifier written into ack status entries.
 func WithNodeID(id string) HandlerOption {
 	return func(h *ControlQueueHandler) { h.nodeID = id }
+}
+
+func WithInfraEventPublisher(p *infraevents.Publisher) HandlerOption {
+	return func(h *ControlQueueHandler) { h.infraPublisher = p }
 }
 
 // WithStopAgentsOnExit controls whether Stop() terminates all managed agents.
@@ -183,6 +189,18 @@ func (h *ControlQueueHandler) sendError(ctx context.Context, requestID, detail s
 // handleSpawn orchestrates booting an agent based on the remote SpawnRequest
 func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.SpawnRequest) {
 	slog.Info("handleSpawn: received spawn request", "agent_id", req.AgentSpec.ID, "class", req.AgentSpec.ClassName, "guild", req.GuildID, "request_id", req.RequestID)
+	_ = h.infraPublisher.Emit(ctx, infraevents.EmitParams{
+		Kind:             "agent.spawn.received",
+		Severity:         infraevents.SeverityInfo,
+		GuildID:          req.GuildID,
+		AgentID:          req.AgentSpec.ID,
+		OrganizationID:   req.OrganizationID,
+		RequestID:        req.RequestID,
+		NodeID:           h.nodeID,
+		SourceComponent:  "forge-go.control-handler",
+		SourceInstanceID: h.nodeID,
+		Message:          "spawn request received",
+	})
 
 	// IDEMPOTENCY GATE: check StatusStore for cross-node awareness
 	if h.statusStore != nil {
@@ -193,6 +211,21 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 			slog.Info("handleSpawn: agent active on different node, skipping",
 				"agent_id", req.AgentSpec.ID,
 				"other_node", existing.NodeID, "state", existing.State)
+			_ = h.infraPublisher.Emit(ctx, infraevents.EmitParams{
+				Kind:             "agent.spawn.skipped_existing_remote",
+				Severity:         infraevents.SeverityInfo,
+				GuildID:          req.GuildID,
+				AgentID:          req.AgentSpec.ID,
+				OrganizationID:   req.OrganizationID,
+				RequestID:        req.RequestID,
+				NodeID:           existing.NodeID,
+				SourceComponent:  "forge-go.control-handler",
+				SourceInstanceID: h.nodeID,
+				Message:          "spawn skipped because agent is active on another node",
+				Detail: map[string]any{
+					"state": existing.State,
+				},
+			})
 			_ = h.responder.SendResponse(ctx, req.RequestID, &protocol.SpawnResponse{
 				RequestID: req.RequestID, Success: true,
 				Message: fmt.Sprintf("agent already %s on node %s", existing.State, existing.NodeID),
@@ -214,6 +247,10 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 	entry, err := h.registry.Lookup(req.AgentSpec.ClassName)
 	if err != nil {
 		slog.Error("handleSpawn: registry lookup failed", "class", req.AgentSpec.ClassName, "error", err)
+		_ = h.emitSpawnRejected(ctx, req, "spawn rejected because registry lookup failed", map[string]any{
+			"error":  err.Error(),
+			"reason": "registry_lookup_failed",
+		})
 		h.sendError(ctx, req.RequestID, fmt.Sprintf("failed to lookup agent class %s from registry: %v", req.AgentSpec.ClassName, err))
 		return
 	}
@@ -266,6 +303,10 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 	envVars, err := envvars.BuildAgentEnv(ctx, guildSpec, &req.AgentSpec, entry, h.secrets)
 	if err != nil {
 		slog.Error("handleSpawn: env var build failed", "agent_id", req.AgentSpec.ID, "error", err)
+		_ = h.emitSpawnRejected(ctx, req, "spawn rejected because environment build failed", map[string]any{
+			"error":  err.Error(),
+			"reason": "env_build_failed",
+		})
 		h.sendError(ctx, req.RequestID, fmt.Sprintf("failed to build environment variables: %v", err))
 		return
 	}
@@ -277,6 +318,9 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 	slog.Info("handleSpawn: env vars built OK", "agent_id", req.AgentSpec.ID, "env_count", len(envVars))
 	sup := h.supervisorForOrganization(orgID)
 	if sup == nil {
+		_ = h.emitSpawnRejected(ctx, req, "spawn rejected because no supervisor is available", map[string]any{
+			"reason": "no_supervisor_available",
+		})
 		h.sendError(ctx, req.RequestID, "no supervisor available for organization")
 		return
 	}
@@ -288,6 +332,14 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 		} else {
 			slog.Error("handleSpawn: supervisor launch failed", "agent_id", req.AgentSpec.ID, "org", orgID, "error", err)
 		}
+		reason := "supervisor_launch_failed"
+		if strings.Contains(err.Error(), "already managed") {
+			reason = "already_managed"
+		}
+		_ = h.emitSpawnRejected(ctx, req, "spawn rejected by supervisor", map[string]any{
+			"error":  err.Error(),
+			"reason": reason,
+		})
 		h.sendError(ctx, req.RequestID, fmt.Sprintf("failed to launch process via supervisor: %v", err))
 		return
 	}
@@ -325,6 +377,22 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 	}
 
 	_ = h.responder.SendResponse(ctx, req.RequestID, msg)
+}
+
+func (h *ControlQueueHandler) emitSpawnRejected(ctx context.Context, req *protocol.SpawnRequest, message string, detail map[string]any) error {
+	return h.infraPublisher.Emit(ctx, infraevents.EmitParams{
+		Kind:             "agent.spawn.rejected",
+		Severity:         infraevents.SeverityError,
+		GuildID:          req.GuildID,
+		AgentID:          req.AgentSpec.ID,
+		OrganizationID:   req.OrganizationID,
+		RequestID:        req.RequestID,
+		NodeID:           h.nodeID,
+		SourceComponent:  "forge-go.control-handler",
+		SourceInstanceID: h.nodeID,
+		Message:          message,
+		Detail:           detail,
+	})
 }
 
 func (h *ControlQueueHandler) handleStop(ctx context.Context, req *protocol.StopRequest) {

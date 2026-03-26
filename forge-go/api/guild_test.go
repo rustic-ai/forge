@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/rustic-ai/forge/forge-go/control"
 	"github.com/rustic-ai/forge/forge-go/filesystem"
 	"github.com/rustic-ai/forge/forge-go/guild/store"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/supervisor"
@@ -77,8 +79,22 @@ filesystem:
 	return srv, mr, dbStore, mux, cleanup
 }
 
+func loadInfraEvents(t *testing.T, srv *Server, guildID string) []infraevents.Event {
+	t.Helper()
+	msgs, err := srv.msgClient.GetMessagesForTopic(context.Background(), guildID, infraevents.Topic)
+	require.NoError(t, err)
+
+	events := make([]infraevents.Event, 0, len(msgs))
+	for _, msg := range msgs {
+		var event infraevents.Event
+		require.NoError(t, json.Unmarshal(msg.Payload, &event))
+		events = append(events, event)
+	}
+	return events
+}
+
 func TestHandleCreateGuild(t *testing.T) {
-	_, _, dbStore, mux, cleanup := setupTestServer(t)
+	srv, _, dbStore, mux, cleanup := setupTestServer(t)
 	defer cleanup()
 
 	reqPayload := CreateGuildRequest{
@@ -120,6 +136,13 @@ func TestHandleCreateGuild(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, guildID, model.ID)
 	assert.Equal(t, store.GuildStatusRequested, model.Status)
+
+	events := loadInfraEvents(t, srv, guildID)
+	require.Len(t, events, 4)
+	assert.Equal(t, "guild.launch.requested", events[0].Kind)
+	assert.Equal(t, "guild.launch.persisted", events[1].Kind)
+	assert.Equal(t, "guild.launch.enqueue_requested", events[2].Kind)
+	assert.Equal(t, "guild.launch.enqueued", events[3].Kind)
 }
 
 func TestHandleGetGuild(t *testing.T) {
@@ -159,7 +182,7 @@ func TestHandleGetGuild(t *testing.T) {
 }
 
 func TestHandleRelaunchGuild_EnqueuesWhenManagerNotRunning(t *testing.T) {
-	_, mr, dbStore, mux, cleanup := setupTestServer(t)
+	srv, mr, dbStore, mux, cleanup := setupTestServer(t)
 	defer cleanup()
 
 	guildID := "relaunch-guild-1"
@@ -203,6 +226,11 @@ func TestHandleRelaunchGuild_EnqueuesWhenManagerNotRunning(t *testing.T) {
 	assert.Equal(t, "spawn", wrapper.Command)
 	assert.Equal(t, guildID, wrapper.Payload.GuildID)
 	assert.Equal(t, guildID+"#manager_agent", wrapper.Payload.AgentSpec.ID)
+
+	events := loadInfraEvents(t, srv, guildID)
+	require.Len(t, events, 2)
+	assert.Equal(t, "guild.launch.enqueue_requested", events[0].Kind)
+	assert.Equal(t, "guild.launch.enqueued", events[1].Kind)
 }
 
 func TestHandleRelaunchGuild_NoOpWhenManagerRunning(t *testing.T) {

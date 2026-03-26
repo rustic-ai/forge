@@ -13,11 +13,12 @@ import (
 	"github.com/rustic-ai/forge/forge-go/forgepath"
 	"github.com/rustic-ai/forge/forge-go/guild/store"
 	"github.com/rustic-ai/forge/forge-go/helper/idgen"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"gopkg.in/yaml.v3"
 )
 
-func Bootstrap(ctx context.Context, db store.Store, pusher protocol.ControlPusher, spec *protocol.GuildSpec, orgID string, dependencyConfigPath string) (*store.GuildModel, error) {
+func Bootstrap(ctx context.Context, db store.Store, pusher protocol.ControlPusher, infraPublisher *infraevents.Publisher, spec *protocol.GuildSpec, orgID string, dependencyConfigPath string) (*store.GuildModel, error) {
 	applyDefaults(spec)
 
 	// Merge dependency configs: forge-home deps take priority over conf deps;
@@ -42,7 +43,16 @@ func Bootstrap(ctx context.Context, db store.Store, pusher protocol.ControlPushe
 		return nil, fmt.Errorf("failed to persist guild and agents: %w", err)
 	}
 
-	if err := EnqueueGuildManagerSpawn(ctx, pusher, spec, orgID); err != nil {
+	_ = infraPublisher.Emit(ctx, infraevents.EmitParams{
+		Kind:            "guild.launch.persisted",
+		Severity:        infraevents.SeverityInfo,
+		GuildID:         guildModel.ID,
+		OrganizationID:  orgID,
+		SourceComponent: "forge-go.guild-bootstrap",
+		Message:         "guild metadata persisted",
+	})
+
+	if err := EnqueueGuildManagerSpawn(ctx, pusher, infraPublisher, spec, orgID); err != nil {
 		return nil, fmt.Errorf("failed to enqueue GMA spawn request: %w", err)
 	}
 
@@ -51,7 +61,7 @@ func Bootstrap(ctx context.Context, db store.Store, pusher protocol.ControlPushe
 	return guildModel, nil
 }
 
-func EnqueueGuildManagerSpawn(ctx context.Context, pusher protocol.ControlPusher, spec *protocol.GuildSpec, orgID string) error {
+func EnqueueGuildManagerSpawn(ctx context.Context, pusher protocol.ControlPusher, infraPublisher *infraevents.Publisher, spec *protocol.GuildSpec, orgID string) error {
 	if spec == nil {
 		return fmt.Errorf("guild spec is required")
 	}
@@ -96,7 +106,46 @@ func EnqueueGuildManagerSpawn(ctx context.Context, pusher protocol.ControlPusher
 		},
 	}
 
-	return protocol.PushSpawnRequest(ctx, pusher, spawnReq)
+	_ = infraPublisher.Emit(ctx, infraevents.EmitParams{
+		Kind:            "guild.launch.enqueue_requested",
+		Severity:        infraevents.SeverityInfo,
+		GuildID:         spec.ID,
+		OrganizationID:  orgID,
+		AgentID:         spawnReq.AgentSpec.ID,
+		RequestID:       spawnReq.RequestID,
+		SourceComponent: "forge-go.guild-bootstrap",
+		Message:         "guild manager spawn enqueue requested",
+	})
+
+	if err := protocol.PushSpawnRequest(ctx, pusher, spawnReq); err != nil {
+		_ = infraPublisher.Emit(ctx, infraevents.EmitParams{
+			Kind:            "guild.launch.enqueue_failed",
+			Severity:        infraevents.SeverityError,
+			GuildID:         spec.ID,
+			OrganizationID:  orgID,
+			AgentID:         spawnReq.AgentSpec.ID,
+			RequestID:       spawnReq.RequestID,
+			SourceComponent: "forge-go.guild-bootstrap",
+			Message:         "guild manager spawn enqueue failed",
+			Detail: map[string]any{
+				"error": err.Error(),
+			},
+		})
+		return err
+	}
+
+	_ = infraPublisher.Emit(ctx, infraevents.EmitParams{
+		Kind:            "guild.launch.enqueued",
+		Severity:        infraevents.SeverityInfo,
+		GuildID:         spec.ID,
+		OrganizationID:  orgID,
+		AgentID:         spawnReq.AgentSpec.ID,
+		RequestID:       spawnReq.RequestID,
+		SourceComponent: "forge-go.guild-bootstrap",
+		Message:         "guild manager spawn enqueued",
+	})
+
+	return nil
 }
 
 func normalizeRuntimeSpecIDs(spec *protocol.GuildSpec, guildID string) {

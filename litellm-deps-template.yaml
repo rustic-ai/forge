@@ -1,0 +1,73 @@
+llm:
+  class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  properties:
+    # (required) Model ID — use "provider/model" format for non-OpenAI
+    # Examples: "gpt-4o", "anthropic/claude-sonnet-4-20250514", "gemini/gemini-2.5-flash",
+    #           "bedrock/amazon.titan-tg1-large", "vertex_ai/gemini-2.0-flash-lite-001",
+    #           "groq/llama3-70b-8192", "ollama/llama3"
+    model: "gpt-4o"
+
+    # Provider override — only needed when model name alone isn't enough
+    # e.g., model="amazon.titan-tg1-large", custom_llm_provider="bedrock"
+    custom_llm_provider: null
+
+    # Custom API endpoint and version (e.g., for Azure or self-hosted)
+    base_url: null
+    api_version: null
+
+    # Request timeout in seconds
+    timeout: null
+
+    # Enable streaming token-by-token responses
+    stream: false
+
+    # Vertex AI specific
+    vertex_location: null   # e.g., "us-central1" (falls back to VERTEXAI_LOCATION env)
+    vertex_project: null     # e.g., "my-gcp-project" (falls back to VERTEXAI_PROJECT env)
+
+    # Enable strict JSON schema validation on structured outputs
+    enable_json_schema_validation: false
+
+    # Pre-prompt messages prepended to every request
+    messages:
+      - role: "system"
+        content: "You are a helpful assistant."
+      # - role: "user"
+      #   content: "Always respond in JSON."
+
+    # Conversation history size (number of messages to retain in memory)
+    message_memory: null  # e.g., 20
+
+    # Strip file/image attachment parts from messages before sending
+    filter_attachments: false
+
+    # --- Tool calling ---
+
+    # Option A: Reference a Toolset class by fully-qualified path
+    # toolset:
+    #   type: "toolset_class"
+    #   class_path: "my_package.tools.MyToolset"
+
+    # Option B: Inline list of tool specifications
+    # toolset:
+    #   type: "toolspec_list"
+    #   tools:
+    #     - name: "get_weather"
+    #       description: "Get current weather for a location"
+    #       parameters:
+    #         type: "object"
+    #         properties:
+    #           location:
+    #             type: "string"
+    #             description: "City name"
+    #         required: ["location"]
+    toolset: null
+
+    # Extract tool calls from response and publish as separate messages
+    extract_tool_calls: false
+
+    # When true + extract_tool_calls, suppress the chat response — only publish tool calls
+    skip_chat_response_on_tool_call: false
+
+    # Retry LLM call N times if tool call parsing fails
+    retries_on_tool_parse_error: 0

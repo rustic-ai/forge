@@ -93,7 +93,7 @@ func TestBuildBwrapArgs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := sup.buildBwrapArgs(tc.entry, tc.cmd, nil)
+			got := sup.buildBwrapArgs(tc.entry, tc.cmd, nil, nil)
 
 			if len(got) != len(tc.expected) {
 				t.Fatalf("buildBwrapArgs() len = %d, want %d\n  got:  %v\n  want: %v", len(got), len(tc.expected), got, tc.expected)
@@ -118,7 +118,7 @@ func TestBuildBwrapArgsWithTCPBridge(t *testing.T) {
 	// We can't easily create a real bridge without a messaging backend,
 	// so we test the arg-building logic with a nil bridge (no bridge case)
 	// and verify TCP --share-net forcing is documented in the code.
-	args := sup.buildBwrapArgs(entry, cmd, nil)
+	args := sup.buildBwrapArgs(entry, cmd, nil, nil)
 
 	// Without bridge, no --share-net should be present for airgapped network
 	for _, arg := range args {
@@ -136,11 +136,69 @@ func TestBuildBwrapArgsWithIPCBridgeBindsSocketDir(t *testing.T) {
 	}
 	cmd := []string{"echo", "hello"}
 
-	args := sup.buildBwrapArgs(entry, cmd, nil)
+	args := sup.buildBwrapArgs(entry, cmd, nil, nil)
 
 	for _, arg := range args {
 		if arg == "/tmp/forge-zmq" {
 			t.Fatal("expected no forge-zmq bind without bridge")
 		}
+	}
+}
+
+func TestBuildBwrapArgsBindsEnvWritablePaths(t *testing.T) {
+	sup := NewBubblewrapSupervisor(nil)
+	entry := &registry.AgentRegistryEntry{Network: []string{}}
+	cmd := []string{"echo", "hello"}
+	baseDir := t.TempDir()
+
+	env := []string{
+		"FORGE_UV_CACHE_DIR=" + baseDir + "/uv-cache",
+		"UV_CACHE_DIR=" + baseDir + "/uv-cache",
+		"XDG_CACHE_HOME=" + baseDir + "/xdg-cache",
+		"XDG_DATA_HOME=" + baseDir + "/xdg-data",
+		"TMPDIR=" + baseDir + "/tmp",
+	}
+
+	args := sup.buildBwrapArgs(entry, cmd, nil, env)
+
+	for _, path := range []string{
+		baseDir + "/uv-cache",
+		baseDir + "/xdg-cache",
+		baseDir + "/xdg-data",
+		baseDir + "/tmp",
+	} {
+		found := false
+		for i := 0; i+2 < len(args); i++ {
+			if args[i] == "--bind" && args[i+1] == path && args[i+2] == path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected bind for %s in args: %v", path, args)
+		}
+	}
+}
+
+func TestBuildBwrapArgsBindsInheritedWritablePaths(t *testing.T) {
+	sup := NewBubblewrapSupervisor(nil)
+	entry := &registry.AgentRegistryEntry{Network: []string{}}
+	cmd := []string{"echo", "hello"}
+	baseDir := t.TempDir()
+	xdgData := baseDir + "/xdg-data"
+
+	t.Setenv("XDG_DATA_HOME", xdgData)
+
+	args := sup.buildBwrapArgs(entry, cmd, nil, nil)
+
+	found := false
+	for i := 0; i+2 < len(args); i++ {
+		if args[i] == "--bind" && args[i+1] == xdgData && args[i+2] == xdgData {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected inherited XDG_DATA_HOME bind for %s in args: %v", xdgData, args)
 	}
 }

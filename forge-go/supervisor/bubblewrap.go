@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -130,7 +131,7 @@ func (p *BubblewrapSupervisor) Launch(ctx context.Context, guildID string, agent
 		}
 	}
 
-	bwrapArgs := p.buildBwrapArgs(entry, runtimeCmd, bridge)
+	bwrapArgs := p.buildBwrapArgs(entry, runtimeCmd, bridge, env)
 
 	if err := p.startProcess(ctx, guildID, agent, agentSpec, bwrapArgs, env); err != nil {
 		if bridge != nil {
@@ -146,7 +147,7 @@ func (p *BubblewrapSupervisor) Launch(ctx context.Context, guildID string, agent
 	return nil
 }
 
-func (p *BubblewrapSupervisor) buildBwrapArgs(entry *registry.AgentRegistryEntry, cmd []string, bridge *AgentMessagingBridge) []string {
+func (p *BubblewrapSupervisor) buildBwrapArgs(entry *registry.AgentRegistryEntry, cmd []string, bridge *AgentMessagingBridge, env []string) []string {
 	var args []string
 
 	args = append(args,
@@ -186,17 +187,13 @@ func (p *BubblewrapSupervisor) buildBwrapArgs(entry *registry.AgentRegistryEntry
 
 	homeDir, _ := os.UserHomeDir()
 	if homeDir != "" {
-		bindPath := func(path string) {
+		for _, path := range bubblewrapWritablePaths(homeDir, env) {
 			if err := os.MkdirAll(path, 0755); err != nil {
 				slog.Warn("failed to create host path for bubblewrap bind", "path", path, "err", err)
-				return
+				continue
 			}
 			args = append(args, "--bind", path, path)
 		}
-
-		bindPath(homeDir + "/.local/share/uv")
-		bindPath(homeDir + "/.cache/uv")
-		bindPath(homeDir + "/.forge")
 	}
 
 	args = append(args, "--")
@@ -498,4 +495,42 @@ func containsString(ss []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func bubblewrapWritablePaths(homeDir string, env []string) []string {
+	paths := []string{
+		filepath.Join(homeDir, ".local", "share", "uv"),
+		filepath.Join(homeDir, ".cache", "uv"),
+		filepath.Join(homeDir, ".forge"),
+	}
+
+	envMap := make(map[string]string, len(env))
+	for _, item := range env {
+		key, value, ok := strings.Cut(item, "=")
+		if ok {
+			envMap[key] = value
+		}
+	}
+
+	for _, key := range []string{"FORGE_UV_CACHE_DIR", "UV_CACHE_DIR", "XDG_CACHE_HOME", "XDG_DATA_HOME", "TMPDIR"} {
+		value := strings.TrimSpace(envMap[key])
+		if value == "" && key != "TMPDIR" {
+			value = strings.TrimSpace(os.Getenv(key))
+		}
+		if value := filepath.Clean(value); filepath.IsAbs(value) && value != "/" && value != "." {
+			paths = append(paths, value)
+		}
+	}
+
+	seen := make(map[string]struct{}, len(paths))
+	deduped := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		seen[path] = struct{}{}
+		deduped = append(deduped, path)
+	}
+
+	return deduped
 }

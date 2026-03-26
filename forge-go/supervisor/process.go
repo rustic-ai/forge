@@ -20,6 +20,7 @@ import (
 
 	"github.com/rustic-ai/forge/forge-go/filesystem"
 	"github.com/rustic-ai/forge/forge-go/forgepath"
+	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
@@ -32,6 +33,7 @@ type ProcessSupervisor struct {
 	bridges          map[string]*AgentMessagingBridge
 	statusStore      AgentStatusStore
 	msgBackend       messaging.Backend
+	infraPublisher   *infraevents.Publisher
 	workDirBase      string
 	orgID            string
 	defaultTransport protocol.AgentTransportMode
@@ -69,6 +71,12 @@ func WithDefaultAgentTransport(mode string) ProcessSupervisorOption {
 func WithMessagingBackend(b messaging.Backend) ProcessSupervisorOption {
 	return func(p *ProcessSupervisor) {
 		p.msgBackend = b
+	}
+}
+
+func WithInfraEventPublisher(pub *infraevents.Publisher) ProcessSupervisorOption {
+	return func(p *ProcessSupervisor) {
+		p.infraPublisher = pub
 	}
 }
 
@@ -117,14 +125,25 @@ func (p *ProcessSupervisor) Launch(ctx context.Context, guildID string, agentSpe
 
 	runtimeCmd := registry.ResolveCommand(entry)
 
-	return p.startProcess(ctx, guildID, agent, agentSpec, runtimeCmd, env)
+	if err := p.startProcess(ctx, guildID, agent, agentSpec, runtimeCmd, env); err != nil {
+		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.failed", infraevents.SeverityError, "agent process failed before startup completed", nil, map[string]any{
+			"error": err.Error(),
+		})
+		return err
+	}
+	return nil
 }
 
 func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, agent *ManagedAgent, agentSpec *protocol.AgentSpec, runtimeCmd []string, env []string) error {
 	ctx, span := otel.Tracer("forge.supervisor").Start(ctx, "supervisor.spawn")
 	defer span.End()
 
+	_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.starting", infraevents.SeverityInfo, "agent process starting", nil, nil)
+
 	if len(runtimeCmd) == 0 {
+		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.start_failed", infraevents.SeverityError, "agent process start failed", nil, map[string]any{
+			"reason": "empty_runtime_command",
+		})
 		return fmt.Errorf("runtimeCmd is empty")
 	}
 
@@ -134,6 +153,10 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 	if err != nil {
 		agent.SetState(StateFailed)
 		agent.LastError = err
+		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.start_failed", infraevents.SeverityError, "agent process start failed", nil, map[string]any{
+			"error":  err.Error(),
+			"reason": "workdir_prepare_failed",
+		})
 		return fmt.Errorf("failed to prepare working directory for agent %s: %w", agent.ID, err)
 	}
 
@@ -143,6 +166,9 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 		if p.msgBackend == nil {
 			agent.SetState(StateFailed)
 			agent.LastError = fmt.Errorf("supervisor-zmq transport requires a messaging backend")
+			_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.start_failed", infraevents.SeverityError, "agent process start failed", nil, map[string]any{
+				"reason": "missing_messaging_backend",
+			})
 			return fmt.Errorf("supervisor-zmq transport requires a messaging backend")
 		}
 
@@ -150,6 +176,10 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 		if err != nil {
 			agent.SetState(StateFailed)
 			agent.LastError = err
+			_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.start_failed", infraevents.SeverityError, "agent process start failed", nil, map[string]any{
+				"error":  err.Error(),
+				"reason": "bridge_create_failed",
+			})
 			return fmt.Errorf("failed to create agent messaging bridge: %w", err)
 		}
 
@@ -158,6 +188,10 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 			bridge.Close()
 			agent.SetState(StateFailed)
 			agent.LastError = err
+			_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.start_failed", infraevents.SeverityError, "agent process start failed", nil, map[string]any{
+				"error":  err.Error(),
+				"reason": "transport_env_config_failed",
+			})
 			return fmt.Errorf("failed to configure supervisor transport env: %w", err)
 		}
 		p.setBridge(guildID, agent.ID, bridge)
@@ -183,6 +217,10 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 		p.stopBridge(guildID, agent.ID)
 		agent.SetState(StateFailed)
 		agent.LastError = err
+		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.start_failed", infraevents.SeverityError, "agent process start failed", nil, map[string]any{
+			"error":  err.Error(),
+			"reason": "cmd_start_failed",
+		})
 		return fmt.Errorf("failed to start agent process %s: %w", agent.ID, err)
 	}
 
@@ -190,6 +228,9 @@ func (p *ProcessSupervisor) startProcess(ctx context.Context, guildID string, ag
 
 	agent.SetPID(cmd.Process.Pid)
 	agent.SetState(StateRunning)
+	_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.started", infraevents.SeverityInfo, "agent process started", nil, map[string]any{
+		"pid": cmd.Process.Pid,
+	})
 
 	logger := slog.With("agent_id", agent.ID, "guild_id", guildID, "node_id", "local-node")
 
@@ -352,11 +393,19 @@ func (p *ProcessSupervisor) monitorProcess(guildID string, agent *ManagedAgent, 
 
 	if agent.IsStopRequested() {
 		agent.SetState(StateStopped)
+		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.stopped", infraevents.SeverityInfo, "agent process stopped", nil, map[string]any{
+			"exit_code": exitCode,
+		})
 		if p.statusStore != nil {
 			_ = p.statusStore.DeleteStatus(ctx, guildID, agent.ID)
 		}
 		return
 	}
+
+	_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.exited", infraevents.SeverityWarn, "agent process exited", nil, map[string]any{
+		"exit_code":      exitCode,
+		"stop_requested": false,
+	})
 
 	agent.SetState(StateRestarting)
 	agent.LastError = err
@@ -374,6 +423,9 @@ func (p *ProcessSupervisor) monitorProcess(guildID string, agent *ManagedAgent, 
 	delay := ComputeBackoff(agent.RestartCount)
 	if delay == 0 {
 		agent.SetState(StateFailed)
+		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.failed", infraevents.SeverityError, "agent process failed after retry exhaustion", &agent.RestartCount, map[string]any{
+			"exit_code": exitCode,
+		})
 		if p.statusStore != nil {
 			_ = p.statusStore.WriteStatus(ctx, guildID, agent.ID, &AgentStatusJSON{State: "failed", Timestamp: time.Now()}, 300*time.Second)
 		}
@@ -381,6 +433,10 @@ func (p *ProcessSupervisor) monitorProcess(guildID string, agent *ManagedAgent, 
 	}
 
 	slog.Info("agent crashed, restarting", "agent_id", agent.ID, "delay", delay, "attempt", agent.RestartCount)
+	_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.restarting", infraevents.SeverityWarn, "agent process restarting after unexpected exit", &agent.RestartCount, map[string]any{
+		"delay_ms":  delay.Milliseconds(),
+		"exit_code": exitCode,
+	})
 
 	select {
 	case <-time.After(delay):
@@ -389,6 +445,9 @@ func (p *ProcessSupervisor) monitorProcess(guildID string, agent *ManagedAgent, 
 				slog.Error("failed to restart process-managed agent", "guild_id", guildID, "agent_id", agent.ID, "error", err)
 				agent.SetState(StateFailed)
 				agent.LastError = err
+				_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.failed", infraevents.SeverityError, "agent process failed during restart", &agent.RestartCount, map[string]any{
+					"error": err.Error(),
+				})
 				if p.statusStore != nil {
 					_ = p.statusStore.WriteStatus(ctx, guildID, agent.ID, &AgentStatusJSON{State: "failed", Timestamp: time.Now()}, 300*time.Second)
 				}
@@ -396,6 +455,9 @@ func (p *ProcessSupervisor) monitorProcess(guildID string, agent *ManagedAgent, 
 		}
 	case <-agent.stopCh:
 		agent.SetState(StateStopped)
+		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.stopped", infraevents.SeverityInfo, "agent process stopped", nil, map[string]any{
+			"exit_code": exitCode,
+		})
 		if p.statusStore != nil {
 			_ = p.statusStore.DeleteStatus(ctx, guildID, agent.ID)
 		}
@@ -561,4 +623,18 @@ func lookupEnvValue(env []string, key string) string {
 		}
 	}
 	return ""
+}
+
+func (p *ProcessSupervisor) emitProcessEvent(ctx context.Context, guildID, agentID, kind, severity, message string, attempt *int, detail map[string]any) error {
+	return p.infraPublisher.Emit(ctx, infraevents.EmitParams{
+		Kind:            kind,
+		Severity:        severity,
+		GuildID:         guildID,
+		AgentID:         agentID,
+		OrganizationID:  p.orgID,
+		SourceComponent: "forge-go.supervisor.process",
+		Attempt:         attempt,
+		Message:         message,
+		Detail:          detail,
+	})
 }

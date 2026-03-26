@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/rustic-ai/forge/forge-go/infraevents"
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/registry"
 	"github.com/rustic-ai/forge/forge-go/secrets"
@@ -100,7 +102,43 @@ func (o *orderTrackingSupervisor) Status(_ context.Context, guildID, agentID str
 
 func (o *orderTrackingSupervisor) StopAll(_ context.Context) error { return nil }
 
-func setupIdempotencyTest(t *testing.T) (*redis.Client, *fakeStatusStore, *orderTrackingSupervisor, *ControlQueueHandler) {
+type recordingEventBackend struct {
+	mu       sync.Mutex
+	messages map[string][]protocol.Message
+}
+
+func newRecordingEventBackend() *recordingEventBackend {
+	return &recordingEventBackend{messages: make(map[string][]protocol.Message)}
+}
+
+func (r *recordingEventBackend) PublishMessage(_ context.Context, namespace, topic string, msg *protocol.Message) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.messages[namespace+":"+topic] = append(r.messages[namespace+":"+topic], *msg)
+	return nil
+}
+
+func (r *recordingEventBackend) GetMessagesForTopic(_ context.Context, namespace, topic string) ([]protocol.Message, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]protocol.Message(nil), r.messages[namespace+":"+topic]...), nil
+}
+
+func (r *recordingEventBackend) GetMessagesSince(_ context.Context, _, _ string, _ uint64) ([]protocol.Message, error) {
+	return nil, nil
+}
+
+func (r *recordingEventBackend) GetMessagesByID(_ context.Context, _ string, _ []uint64) ([]protocol.Message, error) {
+	return nil, nil
+}
+
+func (r *recordingEventBackend) Subscribe(_ context.Context, _ string, _ ...string) (messaging.Subscription, error) {
+	return nil, nil
+}
+
+func (r *recordingEventBackend) Close() error { return nil }
+
+func setupIdempotencyTest(t *testing.T) (*redis.Client, *fakeStatusStore, *orderTrackingSupervisor, *recordingEventBackend, *ControlQueueHandler) {
 	t.Helper()
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
@@ -117,6 +155,9 @@ func setupIdempotencyTest(t *testing.T) (*redis.Client, *fakeStatusStore, *order
 `)
 	ss := newFakeStatusStore()
 	sup := newOrderTrackingSupervisor()
+	backend := newRecordingEventBackend()
+	infraPublisher, err := infraevents.NewPublisher(backend)
+	require.NoError(t, err)
 
 	handler := NewControlQueueHandler(
 		NewRedisControlTransport(rdb),
@@ -126,12 +167,26 @@ func setupIdempotencyTest(t *testing.T) (*redis.Client, *fakeStatusStore, *order
 		nil,
 		WithStatusStore(ss),
 		WithNodeID("test-node"),
+		WithInfraEventPublisher(infraPublisher),
 	)
-	return rdb, ss, sup, handler
+	return rdb, ss, sup, backend, handler
+}
+
+func loadInfraEventKinds(t *testing.T, backend *recordingEventBackend, guildID string) []string {
+	t.Helper()
+	msgs, err := backend.GetMessagesForTopic(context.Background(), guildID, infraevents.Topic)
+	require.NoError(t, err)
+	kinds := make([]string, 0, len(msgs))
+	for _, msg := range msgs {
+		var event infraevents.Event
+		require.NoError(t, json.Unmarshal(msg.Payload, &event))
+		kinds = append(kinds, event.Kind)
+	}
+	return kinds
 }
 
 func TestHandleSpawn_SkipsIfRunningOnDifferentNode(t *testing.T) {
-	rdb, ss, sup, handler := setupIdempotencyTest(t)
+	rdb, ss, sup, backend, handler := setupIdempotencyTest(t)
 	ctx := context.Background()
 
 	// Pre-write status: running on a different node
@@ -157,10 +212,11 @@ func TestHandleSpawn_SkipsIfRunningOnDifferentNode(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(b[1]), &resp))
 	assert.True(t, resp.Success)
 	assert.Contains(t, resp.Message, "already running")
+	assert.Equal(t, []string{"agent.spawn.received", "agent.spawn.skipped_existing_remote"}, loadInfraEventKinds(t, backend, "g1"))
 }
 
 func TestHandleSpawn_SkipsIfStartingOnDifferentNode(t *testing.T) {
-	rdb, ss, sup, handler := setupIdempotencyTest(t)
+	rdb, ss, sup, _, handler := setupIdempotencyTest(t)
 	ctx := context.Background()
 
 	_ = ss.WriteStatus(ctx, "g1", "a1", &supervisor.AgentStatusJSON{
@@ -186,7 +242,7 @@ func TestHandleSpawn_SkipsIfStartingOnDifferentNode(t *testing.T) {
 }
 
 func TestHandleSpawn_ProceedsIfStartingOnSameNode(t *testing.T) {
-	_, ss, sup, handler := setupIdempotencyTest(t)
+	_, ss, sup, _, handler := setupIdempotencyTest(t)
 	ctx := context.Background()
 
 	_ = ss.WriteStatus(ctx, "g1", "a1", &supervisor.AgentStatusJSON{
@@ -206,7 +262,7 @@ func TestHandleSpawn_ProceedsIfStartingOnSameNode(t *testing.T) {
 }
 
 func TestHandleSpawn_ProceedsIfNoStatus(t *testing.T) {
-	_, _, sup, handler := setupIdempotencyTest(t)
+	_, _, sup, _, handler := setupIdempotencyTest(t)
 	ctx := context.Background()
 
 	handler.handleSpawn(ctx, &protocol.SpawnRequest{
@@ -221,7 +277,7 @@ func TestHandleSpawn_ProceedsIfNoStatus(t *testing.T) {
 }
 
 func TestHandleSpawn_WritesStartingToStatusStore(t *testing.T) {
-	_, ss, _, handler := setupIdempotencyTest(t)
+	_, ss, _, _, handler := setupIdempotencyTest(t)
 	ctx := context.Background()
 
 	handler.handleSpawn(ctx, &protocol.SpawnRequest{
@@ -241,7 +297,7 @@ func TestHandleSpawn_WritesStartingToStatusStore(t *testing.T) {
 }
 
 func TestHandleSpawn_AlreadyManagedLocally_SendsError(t *testing.T) {
-	rdb, _, sup, handler := setupIdempotencyTest(t)
+	rdb, _, sup, backend, handler := setupIdempotencyTest(t)
 	ctx := context.Background()
 
 	// First spawn succeeds
@@ -271,4 +327,29 @@ func TestHandleSpawn_AlreadyManagedLocally_SendsError(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(b[1]), &errResp))
 	assert.False(t, errResp.Success)
 	assert.Contains(t, errResp.Error, "already managed")
+	assert.Equal(t, []string{
+		"agent.spawn.received",
+		"agent.spawn.received",
+		"agent.spawn.rejected",
+	}, loadInfraEventKinds(t, backend, "g1"))
+}
+
+func TestHandleSpawn_RegistryLookupFailure_EmitsRejectedInfraEvent(t *testing.T) {
+	rdb, _, _, backend, handler := setupIdempotencyTest(t)
+	ctx := context.Background()
+
+	handler.handleSpawn(ctx, &protocol.SpawnRequest{
+		RequestID: "req-missing-class",
+		GuildID:   "g1",
+		AgentSpec: protocol.AgentSpec{ID: "a1", ClassName: "missing.Agent"},
+	})
+
+	b, err := rdb.BRPop(ctx, 2*time.Second, "forge:control:response:req-missing-class").Result()
+	require.NoError(t, err)
+	var errResp protocol.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(b[1]), &errResp))
+	assert.False(t, errResp.Success)
+	assert.Contains(t, errResp.Error, "failed to lookup agent class")
+
+	assert.Equal(t, []string{"agent.spawn.received", "agent.spawn.rejected"}, loadInfraEventKinds(t, backend, "g1"))
 }

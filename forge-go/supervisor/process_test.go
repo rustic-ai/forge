@@ -2,14 +2,18 @@ package supervisor
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/rustic-ai/forge/forge-go/infraevents"
+	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	gopsprocess "github.com/shirou/gopsutil/v3/process"
 	"github.com/stretchr/testify/require"
@@ -49,6 +53,55 @@ func getChildTreeCmd() []string {
 		return []string{"cmd", "/C", "ping -n 10 127.0.0.1 >NUL"}
 	}
 	return []string{"sh", "-c", `sleep 30 & echo $! > child.pid; wait`}
+}
+
+type recordingInfraBackend struct {
+	mu       sync.Mutex
+	messages map[string][]protocol.Message
+}
+
+func newRecordingInfraBackend() *recordingInfraBackend {
+	return &recordingInfraBackend{messages: make(map[string][]protocol.Message)}
+}
+
+func (r *recordingInfraBackend) PublishMessage(_ context.Context, namespace, topic string, msg *protocol.Message) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.messages[namespace+":"+topic] = append(r.messages[namespace+":"+topic], *msg)
+	return nil
+}
+
+func (r *recordingInfraBackend) GetMessagesForTopic(_ context.Context, namespace, topic string) ([]protocol.Message, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]protocol.Message(nil), r.messages[namespace+":"+topic]...), nil
+}
+
+func (r *recordingInfraBackend) GetMessagesSince(_ context.Context, _, _ string, _ uint64) ([]protocol.Message, error) {
+	return nil, nil
+}
+
+func (r *recordingInfraBackend) GetMessagesByID(_ context.Context, _ string, _ []uint64) ([]protocol.Message, error) {
+	return nil, nil
+}
+
+func (r *recordingInfraBackend) Subscribe(_ context.Context, _ string, _ ...string) (messaging.Subscription, error) {
+	return nil, nil
+}
+
+func (r *recordingInfraBackend) Close() error { return nil }
+
+func loadProcessEventKinds(t *testing.T, backend *recordingInfraBackend, guildID string) []string {
+	t.Helper()
+	msgs, err := backend.GetMessagesForTopic(context.Background(), guildID, infraevents.Topic)
+	require.NoError(t, err)
+	kinds := make([]string, 0, len(msgs))
+	for _, msg := range msgs {
+		var event infraevents.Event
+		require.NoError(t, json.Unmarshal(msg.Payload, &event))
+		kinds = append(kinds, event.Kind)
+	}
+	return kinds
 }
 
 func TestProcessSupervisorLaunchAndStop(t *testing.T) {
@@ -263,4 +316,61 @@ func TestProcessSupervisorAttachedProcessTreeStopsSubprocesses(t *testing.T) {
 	status, err := sup.Status(ctx, guildID, agentID)
 	require.NoError(t, err)
 	require.Equal(t, string(StateStopped), status)
+}
+
+func TestProcessSupervisorEmitsLifecycleInfraEvents(t *testing.T) {
+	backend := newRecordingInfraBackend()
+	pub, err := infraevents.NewPublisher(backend)
+	require.NoError(t, err)
+
+	sup := NewProcessSupervisor(nil, WithWorkDirBase(t.TempDir()), WithInfraEventPublisher(pub))
+	ctx := context.Background()
+	guildID := "test-guild"
+
+	agent := NewManagedAgent(guildID, "agent1")
+	sup.mu.Lock()
+	sup.agents[scopedAgentKey(guildID, "agent1")] = agent
+	sup.mu.Unlock()
+
+	require.NoError(t, sup.startProcess(ctx, guildID, agent, &protocol.AgentSpec{}, getSleepCmd(), nil))
+	require.Eventually(t, func() bool {
+		kinds := loadProcessEventKinds(t, backend, guildID)
+		return len(kinds) >= 2
+	}, 2*time.Second, 20*time.Millisecond)
+	require.NoError(t, sup.Stop(ctx, guildID, "agent1"))
+	require.Eventually(t, func() bool {
+		kinds := loadProcessEventKinds(t, backend, guildID)
+		return len(kinds) >= 3 && kinds[len(kinds)-1] == "agent.process.stopped"
+	}, 3*time.Second, 20*time.Millisecond)
+
+	require.Equal(t, []string{
+		"agent.process.starting",
+		"agent.process.started",
+		"agent.process.stopped",
+	}, loadProcessEventKinds(t, backend, guildID))
+}
+
+func TestProcessSupervisorEmitsFailureInfraEvents(t *testing.T) {
+	backend := newRecordingInfraBackend()
+	pub, err := infraevents.NewPublisher(backend)
+	require.NoError(t, err)
+
+	sup := NewProcessSupervisor(nil, WithWorkDirBase(t.TempDir()), WithInfraEventPublisher(pub))
+	ctx := context.Background()
+	guildID := "test-guild"
+
+	agent := NewManagedAgent(guildID, "agent-bad")
+	sup.mu.Lock()
+	sup.agents[scopedAgentKey(guildID, "agent-bad")] = agent
+	sup.mu.Unlock()
+
+	err = sup.startProcess(ctx, guildID, agent, &protocol.AgentSpec{}, []string{"/definitely/not/a/command"}, nil)
+	require.Error(t, err)
+	require.NoError(t, sup.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.failed", infraevents.SeverityError, "agent process failed before startup completed", nil, map[string]any{"error": err.Error()}))
+
+	require.Equal(t, []string{
+		"agent.process.starting",
+		"agent.process.start_failed",
+		"agent.process.failed",
+	}, loadProcessEventKinds(t, backend, guildID))
 }

@@ -1124,7 +1124,7 @@ func handleLaunchGuildFromBlueprint(s store.Store, pusher protocol.ControlPusher
 
 		var model *store.GuildModel
 		if pusher != nil {
-			model, err = guild.Bootstrap(r.Context(), s, pusher, &guildSpec, req.OrgID, dependencyConfigPath())
+			model, err = guild.Bootstrap(r.Context(), s, pusher, nil, &guildSpec, req.OrgID, dependencyConfigPath())
 			if err != nil {
 				ReplyError(w, http.StatusInternalServerError, "failed to create guild: "+err.Error())
 				return
