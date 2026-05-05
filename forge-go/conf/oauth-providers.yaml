@@ -1,0 +1,42 @@
+# OAuth provider registry for Forge.
+#
+# Each entry defines a named provider with its scopes and (for non-standard
+# services) OAuth2 endpoints. Client credentials are NOT stored here — they
+# are supplied at runtime by the caller (e.g. the Electron app) when initiating
+# the auth flow.
+#
+# For well-known providers (github, google, google-drive, slack, microsoft,
+# notion), auth_url and token_url are optional — Forge fills them in
+# automatically.
+#
+# use_pkce: controls PKCE (S256 code challenge). Defaults to true. Set to
+# false for providers that do not support it.
+#
+# Add a new provider by adding an entry under `providers`. Restart Forge after
+# editing this file.
+
+providers:
+#  github:
+#    display_name: GitHub
+#    description: Access GitHub repositories and user profile for code reading and pull request automation.
+#    scopes: [repo, user:email]
+#
+#  google-drive:
+#    display_name: Google Drive
+#    description: Read and write files in Google Drive for document-based workflows.
+#    scopes:
+#      - https://www.googleapis.com/auth/drive
+#
+#  slack:
+#    display_name: Slack
+#    description: Send messages and read channel history to integrate agents with your Slack workspace.
+#    scopes: [channels:history, channels:read, chat:write, files:read, users:read, team:read]
+#    use_pkce: false  # Slack does not support PKCE
+
+  # Custom service example — uncomment and fill in:
+  # my-service:
+  #   display_name: My Service
+  #   description: What this integration is used for.
+  #   auth_url: https://example.com/oauth/authorize
+  #   token_url: https://example.com/oauth/token
+  #   scopes: [read, write]

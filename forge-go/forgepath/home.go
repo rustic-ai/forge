@@ -20,6 +20,10 @@ const (
 	LocalModelCatalogFile        = "local-model-catalog.yaml"
 	LocalModelCatalogEnv         = "FORGE_LOCAL_MODEL_CATALOG"
 	DefaultLocalModelCatalogPath = "conf/" + LocalModelCatalogFile
+
+	OAuthProvidersConfigFile        = "oauth-providers.yaml"
+	OAuthProvidersConfigEnv         = "FORGE_OAUTH_PROVIDERS_CONFIG"
+	DefaultOAuthProvidersConfigPath = "conf/" + OAuthProvidersConfigFile
 )
 
 // DependencyConfigPath returns the dependency config file path, checking the
@@ -36,6 +40,13 @@ func LocalModelCatalogPath() string {
 		return p
 	}
 	return DefaultLocalModelCatalogPath
+}
+
+func OAuthProvidersConfigPath() string {
+	if p := os.Getenv(OAuthProvidersConfigEnv); p != "" {
+		return p
+	}
+	return DefaultOAuthProvidersConfigPath
 }
 
 var (

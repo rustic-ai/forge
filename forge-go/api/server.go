@@ -16,6 +16,7 @@ import (
 	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/modelfit"
+	"github.com/rustic-ai/forge/forge-go/oauth"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"github.com/rustic-ai/forge/forge-go/supervisor"
 )
@@ -32,7 +33,9 @@ type Server struct {
 	localUI        *localUIState
 	observeService *observeService
 	modelFit       *modelFitService
-	listenAddr     string
+	oauthManager      *oauth.Manager
+	oauthRoutePrefix  string
+	listenAddr        string
 	server         *http.Server
 }
 
@@ -41,7 +44,7 @@ func NewServer(db store.Store, statusStore supervisor.AgentStatusStore, controlP
 	if mc != nil {
 		infraPublisher, _ = infraevents.NewPublisher(mc)
 	}
-	return &Server{
+	s := &Server{
 		store:          db,
 		statusStore:    statusStore,
 		controlPusher:  controlPusher,
@@ -51,6 +54,17 @@ func NewServer(db store.Store, statusStore supervisor.AgentStatusStore, controlP
 		localUI:        newLocalUIState(),
 		listenAddr:     listenAddr,
 	}
+	if cfg, err := oauth.LoadProvidersConfig(forgepath.OAuthProvidersConfigPath()); err != nil {
+		fmt.Printf("WARN: failed to load OAuth providers config: %v\n", err)
+	} else if len(cfg.Providers) > 0 {
+		store, err := oauth.NewTokenStore(os.Getenv("FORGE_OAUTH_TOKEN_STORE"))
+		if err != nil {
+			fmt.Printf("WARN: %v; falling back to in-memory token store\n", err)
+			store, _ = oauth.NewTokenStore("memory")
+		}
+		s.oauthManager = oauth.NewManagerWithStore(cfg, store)
+	}
+	return s
 }
 
 func (s *Server) WithObservability(mode, sqliteDBPath string) *Server {
@@ -151,6 +165,9 @@ func (s *Server) buildRouter() *gin.Engine {
 	}
 	if enableUI {
 		s.registerRusticUIRoutes(router, gemGen)
+		if s.oauthManager != nil {
+			s.registerOAuthRoutes(router, "/rustic")
+		}
 		router.GET("/rustic/modelfit/local-models", wrapHTTP(s.handleListLocalModelFits()))
 		router.GET("/rustic/modelfit/capabilities", wrapHTTP(s.handleGetModelFitCapabilities()))
 		router.GET("/rustic/observe/guilds/:guild_id/messages/:msg_id/spans", wrapHTTPWithPathValues(s.handleObserveMessageSpans(), "guild_id", "msg_id"))
