@@ -98,7 +98,7 @@ entries:
 `
 	tmpfile := filepath.Join(t.TempDir(), "reg.yaml")
 	require.NoError(t, os.WriteFile(tmpfile, []byte(regYaml), 0644))
-	reg, err := registry.Load(tmpfile)
+	reg, err := registry.Load(tmpfile, nil)
 	require.NoError(t, err)
 
 	supervisors := make(map[string]*fakeSupervisor)
@@ -180,7 +180,7 @@ entries:
 `
 	tmpfile := filepath.Join(t.TempDir(), "reg.yaml")
 	require.NoError(t, os.WriteFile(tmpfile, []byte(regYaml), 0644))
-	reg, err := registry.Load(tmpfile)
+	reg, err := registry.Load(tmpfile, nil)
 	require.NoError(t, err)
 
 	supervisors := make(map[string]*fakeSupervisor)
@@ -468,7 +468,7 @@ func loadTestRegistry(t *testing.T, yamlContent string) *registry.Registry {
 	t.Helper()
 	tmpfile := filepath.Join(t.TempDir(), "reg.yaml")
 	require.NoError(t, os.WriteFile(tmpfile, []byte(yamlContent), 0644))
-	reg, err := registry.Load(tmpfile)
+	reg, err := registry.Load(tmpfile, nil)
 	require.NoError(t, err)
 	return reg
 }

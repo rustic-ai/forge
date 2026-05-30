@@ -19,13 +19,10 @@ providers:
 #  github:
 #    display_name: GitHub
 #    description: Access GitHub repositories and user profile for code reading and pull request automation.
-#    scopes: [repo, user:email]
 #
 #  google-drive:
 #    display_name: Google Drive
 #    description: Read and write files in Google Drive for document-based workflows.
-#    scopes:
-#      - https://www.googleapis.com/auth/drive
 #
 #  slack:
 #    display_name: Slack
@@ -39,4 +36,3 @@ providers:
   #   description: What this integration is used for.
   #   auth_url: https://example.com/oauth/authorize
   #   token_url: https://example.com/oauth/token
-  #   scopes: [read, write]

@@ -1,5 +1,7 @@
 package agent
 
+import "github.com/rustic-ai/forge/forge-go/oauth"
+
 type ServerConfig struct {
 	DatabaseURL             string
 	RedisURL                string
@@ -51,4 +53,5 @@ type ClientConfig struct {
 	ZMQBridgeMode     string
 	AttachProcessTree bool
 	StopAgentsOnExit  bool
+	OAuthManager      *oauth.Manager
 }

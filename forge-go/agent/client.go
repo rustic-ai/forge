@@ -138,7 +138,7 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 		return fmt.Errorf("failed to register with server: %w", err)
 	}
 
-	reg, err := registry.Load("")
+	reg, err := registry.Load("", config.OAuthManager)
 	if err != nil {
 		return fmt.Errorf("failed to load agent registry: %w", err)
 	}

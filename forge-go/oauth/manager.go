@@ -49,10 +49,11 @@ type ProviderStatus struct {
 
 // Manager handles OAuth2 flows and token storage for all configured providers.
 type Manager struct {
-	mu           sync.Mutex
-	providers    map[string]ProviderConfig
-	pendingFlows map[string]*pendingFlow
-	store        TokenStore
+	mu              sync.Mutex
+	providers       map[string]ProviderConfig
+	activeProviders map[string]struct{}
+	pendingFlows    map[string]*pendingFlow
+	store           TokenStore
 }
 
 // NewManager constructs a Manager using the default in-memory token store.
@@ -63,9 +64,10 @@ func NewManager(cfg *ProvidersConfig) *Manager {
 // NewManagerWithStore constructs a Manager with a custom token store.
 func NewManagerWithStore(cfg *ProvidersConfig, store TokenStore) *Manager {
 	return &Manager{
-		providers:    cfg.Providers,
-		pendingFlows: make(map[string]*pendingFlow),
-		store:        store,
+		providers:       cfg.Providers,
+		activeProviders: make(map[string]struct{}),
+		pendingFlows:    make(map[string]*pendingFlow),
+		store:           store,
 	}
 }
 
@@ -75,10 +77,10 @@ func (m *Manager) GetAuthURL(orgID, providerID, clientID, clientSecret, redirect
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cfg, ok := m.providers[providerID]
-	if !ok {
+	if _, active := m.activeProviders[providerID]; !active {
 		return "", "", fmt.Errorf("unknown provider: %s", providerID)
 	}
+	cfg := m.providers[providerID]
 
 	endpoint, err := resolveEndpoint(providerID, cfg)
 	if err != nil {
@@ -140,10 +142,10 @@ func (m *Manager) ExchangeCode(ctx context.Context, code, state string) error {
 		return fmt.Errorf("auth flow expired")
 	}
 
-	cfg, ok := m.providers[flow.providerID]
-	if !ok {
+	if _, active := m.activeProviders[flow.providerID]; !active {
 		return fmt.Errorf("unknown provider: %s", flow.providerID)
 	}
+	cfg := m.providers[flow.providerID]
 
 	endpoint, err := resolveEndpoint(flow.providerID, cfg)
 	if err != nil {
@@ -228,12 +230,14 @@ func (m *Manager) Disconnect(orgID, providerID string) bool {
 // ListProviders returns the status of all configured providers for the given
 // org. callbackBaseURL is used to compute the per-provider redirect URL shown
 // when registering the app with the third-party provider.
+// Only providers that have been activated via CheckAndUpdateProvider are returned.
 func (m *Manager) ListProviders(orgID, callbackBaseURL string) []ProviderStatus {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	out := make([]ProviderStatus, 0, len(m.providers))
-	for id, cfg := range m.providers {
+	out := make([]ProviderStatus, 0, len(m.activeProviders))
+	for id := range m.activeProviders {
+		cfg := m.providers[id]
 		entry, connected := m.store.Load(orgID, id)
 		ps := ProviderStatus{
 			ID:          id,
@@ -258,12 +262,37 @@ func (m *Manager) IsConnected(orgID, providerID string) bool {
 	return ok
 }
 
-// ProviderExists reports whether providerID is in the config.
+// ProviderExists reports whether providerID is active (i.e. registered via CheckAndUpdateProvider).
 func (m *Manager) ProviderExists(id string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	_, ok := m.providers[id]
+	_, ok := m.activeProviders[id]
 	return ok
+}
+
+// CheckAndUpdateProvider checks whether providerID exists, merges the given scopes into
+// the provider's scope list, marks the provider as active, and returns true.
+// Returns false if the provider is unknown (no state is updated in that case).
+func (m *Manager) CheckAndUpdateProvider(providerID string, scopes []string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cfg, ok := m.providers[providerID]
+	if !ok {
+		return false
+	}
+	existing := make(map[string]struct{}, len(cfg.Scopes))
+	for _, s := range cfg.Scopes {
+		existing[s] = struct{}{}
+	}
+	for _, s := range scopes {
+		if _, found := existing[s]; !found {
+			cfg.Scopes = append(cfg.Scopes, s)
+			existing[s] = struct{}{}
+		}
+	}
+	m.providers[providerID] = cfg
+	m.activeProviders[providerID] = struct{}{}
+	return true
 }
 
 // ProviderDisplayName returns the display name for a provider.

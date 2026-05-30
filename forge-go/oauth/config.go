@@ -18,7 +18,7 @@ type ProviderConfig struct {
 	Scopes      []string `yaml:"scopes"`
 	RedirectURL string   `yaml:"redirect_url"`
 	// UsePKCE controls whether PKCE (S256) is used. Defaults to true.
-	// Set to false for providers that do not support code_challenge (e.g. Slack).
+	// Set to false for providers that do not support it.
 	UsePKCE *bool `yaml:"use_pkce"`
 }
 

@@ -116,7 +116,7 @@ func TestLevel2_FileDependencyIntegration(t *testing.T) {
     runtime: uvx
 `
 	require.NoError(t, os.WriteFile(regConfPath, []byte(registryYAML), 0o644))
-	r, err := registry.Load(regConfPath)
+	r, err := registry.Load(regConfPath, nil)
 	require.NoError(t, err, "Failed to load registry yaml")
 
 	// 6. Launch via Local Process Supervisor

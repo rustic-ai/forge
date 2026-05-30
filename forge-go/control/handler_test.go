@@ -38,7 +38,7 @@ func TestHandler_Integration(t *testing.T) {
 		"    executable: \"/bin/echo\"\n"
 	tmpfile := filepath.Join(t.TempDir(), "reg.yaml")
 	require.NoError(t, os.WriteFile(tmpfile, []byte(regYaml), 0644))
-	reg, err := registry.Load(tmpfile)
+	reg, err := registry.Load(tmpfile, nil)
 	require.NoError(t, err)
 
 	sec := secrets.NewEnvSecretProvider()
@@ -147,7 +147,7 @@ func TestHandler_SpawnWithoutGuildStore_UsesFallback(t *testing.T) {
 		"    executable: \"/bin/echo\"\n"
 	tmpfile := filepath.Join(t.TempDir(), "reg.yaml")
 	require.NoError(t, os.WriteFile(tmpfile, []byte(regYaml), 0644))
-	reg, err := registry.Load(tmpfile)
+	reg, err := registry.Load(tmpfile, nil)
 	require.NoError(t, err)
 
 	sec := secrets.NewEnvSecretProvider()
@@ -235,7 +235,7 @@ func TestHandler_SpawnWithSuppressedResponse_DoesNotReply(t *testing.T) {
 		"    executable: \"/bin/echo\"\n"
 	tmpfile := filepath.Join(t.TempDir(), "reg.yaml")
 	require.NoError(t, os.WriteFile(tmpfile, []byte(regYaml), 0644))
-	reg, err := registry.Load(tmpfile)
+	reg, err := registry.Load(tmpfile, nil)
 	require.NoError(t, err)
 
 	sec := secrets.NewEnvSecretProvider()

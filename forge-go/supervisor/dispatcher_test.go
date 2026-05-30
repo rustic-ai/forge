@@ -48,7 +48,7 @@ func loadDispatcherTestRegistry(t *testing.T, content string) *registry.Registry
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "registry.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
-	reg, err := registry.Load(path)
+	reg, err := registry.Load(path, nil)
 	require.NoError(t, err)
 	return reg
 }

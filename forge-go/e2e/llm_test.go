@@ -108,7 +108,7 @@ func TestLevel3_LLMAgentIntegration(t *testing.T) {
 	forgePythonPath := filepath.Join(pwd, "..", "..", "forge-python")
 	t.Setenv("FORGE_PYTHON_PKG", forgePythonPath)
 
-	r, err := registry.Load("../conf/forge-agent-registry.yaml")
+	r, err := registry.Load("../conf/forge-agent-registry.yaml", nil)
 	require.NoError(t, err, "Failed to load custom registry yaml")
 
 	entry, _ := r.Lookup(agentSpec.ClassName)

@@ -108,7 +108,7 @@ func TestLevel1_EchoAgentIntegration(t *testing.T) {
 			t.Setenv("FORGE_PYTHON_PKG", forgePythonPath)
 
 			regConfPath := filepath.Join(pwd, "..", "conf", "forge-agent-registry.yaml")
-			r, err := registry.Load(regConfPath)
+			r, err := registry.Load(regConfPath, nil)
 			require.NoError(t, err, "Failed to load registry yaml")
 
 			// Dynamically mount the local Python workspace into the sandbox for testing

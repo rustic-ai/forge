@@ -25,19 +25,19 @@ import (
 type Server struct {
 	contract.UnimplementedServer
 
-	store          store.Store
-	statusStore    supervisor.AgentStatusStore
-	controlPusher  protocol.ControlPusher
-	msgClient      messaging.Backend
-	infraPublisher *infraevents.Publisher
-	fileStore      *filesystem.LocalFileStore
-	localUI        *localUIState
-	observeService *observeService
-	modelFit       *modelFitService
-	oauthManager      *oauth.Manager
-	oauthRoutePrefix  string
-	listenAddr        string
-	server         *http.Server
+	store            store.Store
+	statusStore      supervisor.AgentStatusStore
+	controlPusher    protocol.ControlPusher
+	msgClient        messaging.Backend
+	infraPublisher   *infraevents.Publisher
+	fileStore        *filesystem.LocalFileStore
+	localUI          *localUIState
+	observeService   *observeService
+	modelFit         *modelFitService
+	oauthManager     *oauth.Manager
+	oauthRoutePrefix string
+	listenAddr       string
+	server           *http.Server
 }
 
 func NewServer(db store.Store, statusStore supervisor.AgentStatusStore, controlPusher protocol.ControlPusher, mc messaging.Backend, fs *filesystem.LocalFileStore, listenAddr string) *Server {
@@ -80,6 +80,11 @@ func (s *Server) WithOAuth(kind string) *Server {
 	s.oauthManager = oauth.NewManagerWithStore(cfg, store)
 	keychain.SetOAuthManager(s.oauthManager)
 	return s
+}
+
+// OAuthManager returns the oauth.Manager initialised by WithOAuth, or nil if OAuth is not configured.
+func (s *Server) OAuthManager() *oauth.Manager {
+	return s.oauthManager
 }
 
 func (s *Server) WithObservability(mode, sqliteDBPath string) *Server {

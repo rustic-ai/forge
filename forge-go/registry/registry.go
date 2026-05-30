@@ -2,9 +2,11 @@ package registry
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
+	"github.com/rustic-ai/forge/forge-go/oauth"
 	"github.com/rustic-ai/forge/forge-go/protocol"
 	"gopkg.in/yaml.v3"
 )
@@ -50,8 +52,10 @@ type Registry struct {
 	entries map[string]AgentRegistryEntry
 }
 
-// Load reads and parses an agent registry yaml file
-func Load(path string) (*Registry, error) {
+// Load reads and parses an agent registry yaml file and validates OAuth provider references.
+// If oauthMgr is non-nil, Validate is called automatically after class-name validation;
+// entries referencing unknown OAuth providers are removed and a warning is logged.
+func Load(path string, oauthMgr *oauth.Manager) (*Registry, error) {
 	if path == "" {
 		path = os.Getenv("FORGE_AGENT_REGISTRY")
 		if path == "" {
@@ -83,6 +87,7 @@ func Load(path string) (*Registry, error) {
 		r.entries[entry.ClassName] = entry
 	}
 
+	r.ValidateOAuth(oauthMgr)
 	return r, nil
 }
 
@@ -124,6 +129,31 @@ func (r *Registry) ClassNames() []string {
 		classNames = append(classNames, className)
 	}
 	return classNames
+}
+
+// ValidateOAuth checks each registry entry that declares OAuth needs against the provided oauth.Manager.
+// Entries referencing an unknown non-optional OAuth provider are removed from the registry, and a warning is logged.
+// Optional OAuth needs that reference an unknown provider are only warned about.
+// Load calls ValidateOAuth automatically when a non-nil oauth.Manager is provided.
+func (r *Registry) ValidateOAuth(oauthMgr *oauth.Manager) {
+	if oauthMgr == nil {
+		return
+	}
+	for className, entry := range r.entries {
+		for _, need := range entry.OAuth {
+			if !oauthMgr.CheckAndUpdateProvider(need.Provider, need.Scopes) {
+				if need.Optional != nil && *need.Optional {
+					log.Printf("registry: agent %q (class %s) references unknown optional OAuth provider %q; continuing without it",
+						entry.ID, className, need.Provider)
+				} else {
+					log.Printf("registry: skipping agent %q (class %s) as it references unknown OAuth provider %q",
+						entry.ID, className, need.Provider)
+					delete(r.entries, className)
+					break
+				}
+			}
+		}
+	}
 }
 
 // ResolveCommand generates the OS exec slice strings required to launch the given agent entry

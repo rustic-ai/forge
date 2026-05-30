@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/rustic-ai/forge/forge-go/oauth"
 )
 
 func TestParseRegistry(t *testing.T) {
@@ -27,7 +29,7 @@ func TestParseRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reg, err := Load(path)
+	reg, err := Load(path, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -123,6 +125,96 @@ func TestResolveUVXCommand_UsesConfiguredFallback(t *testing.T) {
 
 	if got := ResolveUVXCommand(); got != configuredUVX {
 		t.Fatalf("expected configured uvx path %q, got %q", configuredUVX, got)
+	}
+}
+
+func TestValidate_RemovesEntryWithUnknownOAuthProvider(t *testing.T) {
+	yml := `entries:
+  - id: AgentA
+    class_name: "test.AgentA"
+    runtime: "binary"
+    executable: "python"
+    oauth:
+      - provider: "github"
+  - id: AgentB
+    class_name: "test.AgentB"
+    runtime: "binary"
+    executable: "python"
+    oauth:
+      - provider: "google"`
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "registry.yaml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &oauth.ProvidersConfig{
+		Providers: map[string]oauth.ProviderConfig{
+			"github": {},
+		},
+	}
+	mgr := oauth.NewManager(cfg)
+	reg, err := Load(path, mgr)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if _, err := reg.Lookup("test.AgentA"); err != nil {
+		t.Errorf("AgentA (valid provider) should remain in registry, got: %v", err)
+	}
+	if _, err := reg.Lookup("test.AgentB"); err == nil {
+		t.Error("AgentB (unknown provider) should have been removed from registry")
+	}
+}
+
+func TestValidate_NilManagerIsNoop(t *testing.T) {
+	yml := `entries:
+  - id: AgentA
+    class_name: "test.AgentA"
+    runtime: "binary"
+    executable: "python"
+    oauth:
+      - provider: "github"`
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "registry.yaml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg, err := Load(path, nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if _, err := reg.Lookup("test.AgentA"); err != nil {
+		t.Errorf("Load(nil) should be a no-op; AgentA should still be present: %v", err)
+	}
+}
+
+func TestValidate_NoOAuthEntryUnaffected(t *testing.T) {
+	yml := `entries:
+  - id: AgentA
+    class_name: "test.AgentA"
+    runtime: "binary"
+    executable: "python"`
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "registry.yaml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &oauth.ProvidersConfig{}
+	mgr := oauth.NewManager(cfg)
+	reg, err := Load(path, mgr)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if _, err := reg.Lookup("test.AgentA"); err != nil {
+		t.Errorf("Agent with no oauth needs should not be removed: %v", err)
 	}
 }
 
