@@ -108,16 +108,31 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 	time.Sleep(2 * time.Second)
 
 	// Determine the topic to send user messages to
-	// For guilds with routing rules (UserProxyAgent), use default_topic
+	// For guilds with routing rules, extract the destination from the first route
 	// Otherwise use the first agent's topic (simple echo-style guilds)
 	userMessageTopic := "default_topic"
+	useWrappedMessages := false
 	hasRoutingRules := spec.Routes != nil && len(spec.Routes.Steps) > 0
 
-	if !hasRoutingRules && len(spec.Agents) > 0 && len(spec.Agents[0].AdditionalTopics) > 0 {
+	if hasRoutingRules && len(spec.Routes.Steps) > 0 {
+		// Guild has routing - check if it uses UserProxyAgent
+		firstRoute := spec.Routes.Steps[0]
+		if firstRoute.AgentType != nil && *firstRoute.AgentType == "rustic_ai.core.agents.utils.user_proxy_agent.UserProxyAgent" {
+			// This guild uses UserProxyAgent - we need to create one and send wrapped messages
+			useWrappedMessages = true
+			// Messages go to user:{userID} and UserProxyAgent will route them
+			// according to the guild routing rules
+		} else if firstRoute.Destination != nil {
+			// Send directly to the route destination
+			topics := firstRoute.Destination.Topics.ToSlice()
+			if len(topics) > 0 {
+				userMessageTopic = topics[0]
+			}
+		}
+	} else if len(spec.Agents) > 0 && len(spec.Agents[0].AdditionalTopics) > 0 {
 		// Simple guild without routing - send directly to first agent
 		userMessageTopic = spec.Agents[0].AdditionalTopics[0]
 	}
-	// Complex guilds with routing rules - keep default_topic
 
 	// Show agent status
 	if !guildQuiet {
@@ -134,8 +149,54 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 	}
 	defer sub.Close()
 
+	// Create UserProxyAgent only if this guild uses wrapped messages
+	if useWrappedMessages {
+		if !guildQuiet {
+			fmt.Println("   Creating UserProxyAgent...")
+		}
+		creationMsg, err := cli.BuildUserProxyCreationRequest(config.UserID, config.UserName)
+		if err != nil {
+			return fmt.Errorf("failed to build UserProxyAgent creation request: %w", err)
+		}
+		if err := runtime.PublishMessage(guildID, "system_topic", creationMsg); err != nil {
+			return fmt.Errorf("failed to create UserProxyAgent: %w", err)
+		}
+
+		// Wait for UserProxyAgent to be created and appear in agent status
+		if !guildQuiet {
+			fmt.Println("   Waiting for UserProxyAgent to start...")
+		}
+		userProxyCreated := false
+		for i := 0; i < 10; i++ {
+			time.Sleep(500 * time.Millisecond)
+			statuses, err := runtime.GetAgentStatuses(guildID)
+			if err == nil {
+				for agentID := range statuses {
+					agentName := runtime.GetAgentName(agentID)
+					if strings.Contains(agentName, "test-user") || strings.Contains(agentID, "upa-") {
+						userProxyCreated = true
+						if guildVerbose {
+							fmt.Printf("   UserProxyAgent created: %s\n", agentName)
+						}
+						break
+					}
+				}
+			}
+			if userProxyCreated {
+				break
+			}
+		}
+		if !userProxyCreated && guildVerbose {
+			fmt.Println("   Warning: UserProxyAgent may not have been created")
+		}
+	}
+
 	if guildVerbose {
-		fmt.Printf("   Sending user messages to: %s\n\n", userMessageTopic)
+		if useWrappedMessages {
+			fmt.Printf("   Sending wrapped messages to: user:%s (routes to %s)\n\n", config.UserID, userMessageTopic)
+		} else {
+			fmt.Printf("   Sending user messages to: %s\n\n", userMessageTopic)
+		}
 	}
 
 	// Set up context for shutdown
@@ -143,7 +204,7 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	// Start message display goroutine
-	go displayMessages(ctx, sub, runtime, spec, guildVerbose, guildShowRouting)
+	go displayMessages(ctx, sub, runtime, spec, config.UserID, guildVerbose, guildShowRouting)
 
 	// Interactive REPL
 	fmt.Println("\n" + strings.Repeat("=", 70))
@@ -224,7 +285,7 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 			}
 
 			// Send chat message
-			if err := sendChatMessage(runtime, guildID, config.UserID, config.UserName, line, userMessageTopic); err != nil {
+			if err := sendChatMessage(runtime, guildID, config.UserID, config.UserName, line, userMessageTopic, useWrappedMessages); err != nil {
 				fmt.Printf("❌ Error sending message: %v\n", err)
 			}
 		}
@@ -269,21 +330,37 @@ func showAgentStatus(runtime *cli.GuildRuntime, guildID string) error {
 	return nil
 }
 
-func sendChatMessage(runtime *cli.GuildRuntime, guildID, userID, userName, text, topic string) error {
-	msg, err := cli.BuildChatMessage(userID, userName, text, topic)
-	if err != nil {
-		return err
+func sendChatMessage(runtime *cli.GuildRuntime, guildID, userID, userName, text, topic string, useWrapped bool) error {
+	var msg *protocol.Message
+	var err error
+	var actualTopic string
+
+	if useWrapped {
+		// Build a wrapped message for UserProxyAgent
+		msg, err = cli.BuildWrappedChatMessage(userID, userName, text)
+		if err != nil {
+			return err
+		}
+		// Extract the actual topic from the message (should be user:{userID})
+		actualTopic = msg.Topics.ToSlice()[0]
+	} else {
+		// Build a regular chat message
+		msg, err = cli.BuildChatMessage(userID, userName, text, topic)
+		if err != nil {
+			return err
+		}
+		actualTopic = topic
 	}
 
-	fmt.Printf("📤 Sending to topic: %s\n", topic)
-	if err := runtime.PublishMessage(guildID, topic, msg); err != nil {
+	fmt.Printf("📤 Sending to topic: %s\n", actualTopic)
+	if err := runtime.PublishMessage(guildID, actualTopic, msg); err != nil {
 		return fmt.Errorf("failed to publish: %w", err)
 	}
 
 	return nil
 }
 
-func displayMessages(ctx context.Context, sub *cli.GuildSubscription, runtime *cli.GuildRuntime, spec *protocol.GuildSpec, verbose, showRouting bool) {
+func displayMessages(ctx context.Context, sub *cli.GuildSubscription, runtime *cli.GuildRuntime, spec *protocol.GuildSpec, userID string, verbose, showRouting bool) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -292,7 +369,7 @@ func displayMessages(ctx context.Context, sub *cli.GuildSubscription, runtime *c
 			if !ok {
 				return
 			}
-			printMessage(msg, runtime, spec, verbose, showRouting)
+			printMessage(msg, runtime, spec, userID, verbose, showRouting)
 		case err, ok := <-sub.Errors():
 			if !ok {
 				return
@@ -302,7 +379,7 @@ func displayMessages(ctx context.Context, sub *cli.GuildSubscription, runtime *c
 	}
 }
 
-func printMessage(msg *protocol.Message, runtime *cli.GuildRuntime, spec *protocol.GuildSpec, verbose, showRouting bool) {
+func printMessage(msg *protocol.Message, runtime *cli.GuildRuntime, spec *protocol.GuildSpec, userID string, verbose, showRouting bool) {
 	// Debug: show all message formats in verbose mode only
 	if verbose {
 		topicsDebug := msg.Topics.ToSlice()
@@ -331,10 +408,27 @@ func printMessage(msg *protocol.Message, runtime *cli.GuildRuntime, spec *protoc
 		if msg.Format == "rustic_ai.forge.runtime.InfraEvent" {
 			return
 		}
+		// Skip participant list updates (noisy)
+		if msg.Format == "rustic_ai.core.agents.utils.user_proxy_agent.ParticipantList" {
+			return
+		}
+	}
+
+	topics := msg.Topics.ToSlice()
+
+	if !verbose {
+		// Skip messages on user:{userID} topic - these are echoes of our sent messages
+		if len(topics) > 0 && topics[0] == "user:"+userID {
+			return
+		}
+
+		// For user_notifications: show only agent responses (3+ routing entries), skip unwrap notifications
+		if len(topics) > 0 && topics[0] == "user_notifications:"+userID && len(msg.MessageHistory) < 3 {
+			return
+		}
 	}
 
 	timestamp := time.Unix(int64(msg.Timestamp), 0).Format("15:04:05")
-	topics := msg.Topics.ToSlice()
 	topicStr := strings.Join(topics, ", ")
 
 	// Message header
