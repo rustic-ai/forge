@@ -352,7 +352,7 @@ func sendChatMessage(runtime *cli.GuildRuntime, guildID, userID, userName, text,
 		actualTopic = topic
 	}
 
-	fmt.Printf("📤 Sending to topic: %s\n", actualTopic)
+	fmt.Printf("📤 Sending to topic: %s (format: %s)\n", actualTopic, msg.Format)
 	if err := runtime.PublishMessage(guildID, actualTopic, msg); err != nil {
 		return fmt.Errorf("failed to publish: %w", err)
 	}
@@ -582,6 +582,7 @@ func printMessage(msg *protocol.Message, runtime *cli.GuildRuntime, spec *protoc
 }
 
 func findForgeRoot(startDir string) string {
+	// First try current directory and walk up
 	dir := startDir
 	for {
 		goModPath := filepath.Join(dir, "go.mod")
@@ -600,6 +601,21 @@ func findForgeRoot(startDir string) string {
 		}
 		dir = parent
 	}
+
+	// If not found walking up, try common subdirectory patterns
+	// This handles the case where we're in the repo root but go.mod is in forge-go/
+	commonSubdirs := []string{"forge-go", "go", "backend"}
+	for _, subdir := range commonSubdirs {
+		forgeGoPath := filepath.Join(startDir, subdir)
+		goModPath := filepath.Join(forgeGoPath, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			content, _ := os.ReadFile(goModPath)
+			if strings.Contains(string(content), "github.com/rustic-ai/forge/forge-go") {
+				return forgeGoPath
+			}
+		}
+	}
+
 	return ""
 }
 
