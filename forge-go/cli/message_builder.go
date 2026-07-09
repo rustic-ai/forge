@@ -55,7 +55,7 @@ func BuildChatMessage(userID, userName, text, topic string) (*protocol.Message, 
 	convIDInt := convID.ToInt()
 
 	msg := protocol.NewMessageFromGemstoneID(msgID)
-	msg.Format = "chatCompletionRequest"  // Use short format - gateway normalizes it
+	msg.Format = "rustic_ai.core.guild.agent_ext.depends.llm.models.ChatCompletionRequest"  // Use full format to match routing rules
 	msg.Sender = protocol.AgentTag{
 		ID:   &userID,
 		Name: &userName,
