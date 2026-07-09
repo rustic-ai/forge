@@ -22,7 +22,7 @@ entries:
     class_name: rustic_ai.vertexai.agents.google_research_agent.GoogleResearchAgent
     description: Google Search grounding agent
     runtime: uvx
-    package: rusticai-vertexai
+    package: /home/nihal/Projects/ai-platform/rustic-ai/vertexai/dist/rusticai_vertexai-1.2.3-py3-none-any.whl
     secrets:
       - VERTEXAI_PROJECT
       - VERTEXAI_LOCATION
@@ -30,7 +30,7 @@ entries:
     class_name: rustic_ai.vertexai.agents.content_moderation.ContentModerationAgent
     description: Vertex AI content moderation
     runtime: uvx
-    package: rusticai-vertexai
+    package: /home/nihal/Projects/ai-platform/rustic-ai/vertexai/dist/rusticai_vertexai-1.2.3-py3-none-any.whl
     with_dependencies:
       - pandas
     secrets:
@@ -40,7 +40,7 @@ entries:
     class_name: rustic_ai.vertexai.agents.image_generation.VertexAiImagenAgent
     description: Vertex AI Imagen generation
     runtime: uvx
-    package: rusticai-vertexai
+    package: /home/nihal/Projects/ai-platform/rustic-ai/vertexai/dist/rusticai_vertexai-1.2.3-py3-none-any.whl
     secrets:
       - VERTEXAI_PROJECT
       - VERTEXAI_LOCATION
@@ -54,6 +54,7 @@ entries:
     with_dependencies:
       - rusticai-litellm
       - rusticai-lancedb
+      - /home/nihal/Projects/ai-platform/rustic-ai/pandas-analyst/dist/rusticai_pandas_analyst-0.1.3-py3-none-any.whl
     secrets:
       - OPENAI_API_KEY
       - ANTHROPIC_API_KEY
@@ -66,6 +67,7 @@ entries:
     with_dependencies:
       - rusticai-litellm
       - rusticai-lancedb
+      - /home/nihal/Projects/ai-platform/rustic-ai/pandas-analyst/dist/rusticai_pandas_analyst-0.1.3-py3-none-any.whl
     secrets:
       - OPENAI_API_KEY
       - ANTHROPIC_API_KEY
@@ -175,132 +177,132 @@ entries:
     class_name: rustic_ai.demos.agents.bom_risk_explorer.ask_question_agent.AskQuestionAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: ComplianceScanAgent
     class_name: rustic_ai.demos.agents.contract_copilot.compliance_scan_agent.ComplianceScanAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: RedlineDiffAgent
     class_name: rustic_ai.demos.agents.contract_copilot.redline_diff_agent.RedlineDiffAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: CSVDataAgent
     class_name: rustic_ai.demos.agents.csv.csv_data_agent.CSVDataAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: ForecastingAgent
     class_name: rustic_ai.demos.agents.forecasting.prophet.ForecastingAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: BeautifulSoupAgent
     class_name: rustic_ai.demos.agents.html_parser.beautiful_soup_agent.BeautifulSoupAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: LifecycleScorerAgent
     class_name: rustic_ai.demos.agents.obsolescence_radar.lifecycle_scorer_agent.LifecycleScorerAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: ProductRiskCalculatorAgent
     class_name: rustic_ai.demos.agents.obsolescence_radar.product_risk_calculator_agent.ProductRiskCalculatorAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: ReplacementFinderAgent
     class_name: rustic_ai.demos.agents.obsolescence_radar.replacement_finder_agent.ReplacementFinderAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: OCRAgent
     class_name: rustic_ai.demos.agents.ocr.tesseract_agent.OCRAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: FileReaderWriterAgent
     class_name: rustic_ai.demos.agents.preprocessing.file_reader_writer_agent.FileReaderWriterAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: ImageAgent
     class_name: rustic_ai.demos.agents.preprocessing.image_agent.ImageAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: PandasAgent
     class_name: rustic_ai.demos.agents.preprocessing.pandas_agent.PandasAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: CPQAgent
     class_name: rustic_ai.demos.agents.quote_ai.cpq_integration_agent.CPQAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: OptimizerAgent
     class_name: rustic_ai.demos.agents.quote_ai.optimizer_agent.OptimizerAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: ReportGeneratorAgent
     class_name: rustic_ai.demos.agents.report_generator.report_agent.ReportGeneratorAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: HunterIOAgent
     class_name: rustic_ai.demos.agents.research.hunter_io_agent.HunterIOAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: RFQAssistManager
     class_name: rustic_ai.demos.agents.rfq_assist.manager.RFQAssistManager
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: ClockAgent
     class_name: rustic_ai.demos.agents.simulation.clock_agent.ClockAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: DynamicRoutingAgent
     class_name: rustic_ai.demos.agents.simulation.dynamic_router_agent.DynamicRoutingAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: StatusTrackerAgent
     class_name: rustic_ai.demos.agents.simulation.status_tracker_agent.StatusTrackerAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: StoryImageAgent
     class_name: rustic_ai.demos.agents.story_telling.image_agent.StoryImageAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: LiteLLMAgentWithContext
     class_name: rustic_ai.demos.agents.story_telling.lite_llm_agent_with_context.LiteLLMAgentWithContext
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: SyncMarvinAgent
     class_name: rustic_ai.demos.agents.story_telling.sync_classifier_agent.SyncMarvinAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: LineageBuilderAgent
     class_name: rustic_ai.demos.agents.traceability.lineage_builder_agent.LineageBuilderAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: VegaLiteAgent
     class_name: rustic_ai.demos.agents.viz.vegalite_agent.VegaLiteAgent
     description: Auto-added from static agents snapshot
     runtime: uvx
-    package: rusticai-demos
+    package: /home/nihal/Projects/ai-platform/demos/dist/rusticai_demos-0.0.1-py3-none-any.whl
   - id: AutonomousCFO
     class_name: rustic_ai.fiscal_eye.data_analyst.autonomous_cfo.AutonomousCFO
     description: Auto-added from static agents snapshot
@@ -361,3 +363,8 @@ entries:
     description: Auto-added from static agents snapshot
     runtime: uvx
     package: rusticai-simulation
+  - id: MemoryAgent
+    class_name: rustic_ai.uniko_agent.agent.MemoryAgent
+    description: Memory and knowledge management agent
+    runtime: uvx
+    package: /home/nihal/Projects/ai-platform/rustic-ai/uniko-agent/dist/rusticai_uniko_agent-0.0.1-py3-none-any.whl

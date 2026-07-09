@@ -33,4 +33,7 @@ func init() {
 			forgepath.SetHome(forgeHome)
 		}
 	}
+
+	// Register guild command
+	RootCmd.AddCommand(GuildCmd)
 }
