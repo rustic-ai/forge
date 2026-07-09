@@ -1,0 +1,7 @@
+# Build output
+site/
+
+# Local tooling
+.venv/
+.cache/
+__pycache__/

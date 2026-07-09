@@ -141,7 +141,7 @@ Forge exposes:
 
 Detailed end-to-end local debug steps are in:
 
-- `LOCAL_DEBUG.md`
+- `docs/LOCAL_DEBUG.md`
 
 ## License
 

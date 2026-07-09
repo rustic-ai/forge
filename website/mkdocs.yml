@@ -1,0 +1,92 @@
+site_name: Forge Documentation
+site_description: The Rustic AI runtime for running guilds — a Go control plane and Python execution bridge for placing, supervising, and recovering multi-agent workloads across a fleet of nodes
+site_url: https://rustic-ai.github.io/forge/
+repo_url: https://github.com/rustic-ai/forge
+repo_name: rustic-ai/forge
+
+copyright: Copyright &copy; 2024-2026 Dragonscale Industries Inc. - Part of The Rustic Initiative
+
+nav:
+  - Home: index.md
+  - Why Forge: why-forge.md
+  - Getting Started:
+      - Overview: getting-started/overview.md
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - Your First Guild: getting-started/first-guild.md
+  - Features:
+      - Overview: features/index.md
+      - Guilds: features/guilds.md
+      - Agents: features/agents.md
+      - Distributed Scheduling & Placement: features/distributed-scheduling.md
+      - Supervision & Recovery: features/supervision-recovery.md
+      - Messaging Bus: features/messaging.md
+      - Gateway & WebSockets: features/gateway-websockets.md
+      - Model Fit: features/model-fit.md
+      - Secrets & OAuth: features/secrets-oauth.md
+      - Telemetry & Observability: features/telemetry.md
+      - Storage & Files: features/storage.md
+      - HTTP API: features/http-api.md
+  - Concepts:
+      - Architecture: concepts/architecture.md
+      - Guild Model: concepts/guild-model.md
+      - Agent Model: concepts/agent-model.md
+      - Distributed Control Plane: concepts/distributed-control-plane.md
+      - Messaging & Protocol: concepts/messaging-protocol.md
+      - Placement & Reconciliation: concepts/placement-reconciliation.md
+  - Guides:
+      - Running a Guild: guides/running-a-guild.md
+      - Authoring Guild Specs: guides/authoring-guild-specs.md
+      - Distributed Deployment: guides/distributed-deployment.md
+      - Securing Secrets & OAuth: guides/securing-secrets.md
+      - Observability: guides/observability.md
+      - Model Fit for Local LLMs: guides/model-fit.md
+  - Use Cases:
+      - Local Desktop Runtime: use-cases/local-desktop.md
+      - Distributed Cluster: use-cases/distributed-cluster.md
+      - Multi-Agent Guilds: use-cases/multi-agent-guilds.md
+  - Internals:
+      - Control Plane: internals/control-plane.md
+      - Scheduler & Placement: internals/scheduler-placement.md
+      - Reconciler & Recovery: internals/reconciler-recovery.md
+      - Leader Election: internals/leader-election.md
+      - Messaging Backends: internals/messaging-backends.md
+      - Process Supervisors: internals/supervisors.md
+  - Reference:
+      - CLI Reference: reference/cli.md
+      - HTTP API Reference: reference/http-api.md
+      - Configuration & Environment: reference/configuration.md
+      - Troubleshooting: reference/troubleshooting.md
+      - Glossary: reference/glossary.md
+
+theme:
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    primary: custom
+  features:
+    - content.tabs.link
+
+extra_css:
+  - assets/stylesheets/theme.css
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
