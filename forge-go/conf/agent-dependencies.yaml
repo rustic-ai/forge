@@ -1,16 +1,18 @@
 kvstore:
   class_name: rustic_ai.core.guild.agent_ext.depends.kvstore.InMemoryKVStoreResolver
+  provided_type: rustic_ai.core.kvstore.KVStore
   properties: {}
 filesystem:
   class_name: rustic_ai.core.guild.agent_ext.depends.filesystem.FileSystemResolver
+  provided_type: rustic_ai.core.filesystem.FileSystem
   properties:
-    path_base: /
+    path_base: /tmp
     protocol: file
     storage_options:
       auto_mkdir: true
-    asynchronous: true
 code_runner:
   class_name: rustic_ai.core.guild.agent_ext.depends.code_execution.stateless.InProcessCodeInterpreterResolver
+  provided_type: rustic_ai.core.code_execution.CodeRunner
   properties: {}
 embeddings:
   class_name: rustic_ai.langchain.agent_ext.embeddings.openai.OpenAIEmbeddingsResolver
@@ -27,23 +29,29 @@ textsplitter:
 kb_backend:
   class_name: rustic_ai.core.knowledgebase.kbindex_backend_memory.InMemoryKBIndexBackendResolver
   properties: {}
-uniko:
-  class_name: rustic_ai.uniko_agent.resolver.UnikoResolver
-  properties: {}
 
 # ---------------------------------------------------------------------------
 # LLM Dependencies
 # ---------------------------------------------------------------------------
+# NOTE: LiteLLMResolver.__init__(model, conf={}) accepts only `model` plus a
+# `conf` dict; all other connection settings (base_url, api_version,
+# vertex_project, custom_llm_provider, ...) must be nested under `conf:` or the
+# resolver raises TypeError on instantiation. This mirrors the `textsplitter`
+# entry above.
 
 # --- Local llama.cpp server (OpenAI-compatible, port 55262) ---
 
 llm:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
-    model: gpt-4.1
+    model: openai/rustic/qwen3.5-0.8b-starter
+    conf:
+      base_url: http://localhost:55262/v1
 
 llm_local_qwen3_5_0_8b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3.5-0.8b-starter
     conf:
@@ -51,6 +59,7 @@ llm_local_qwen3_5_0_8b:
 
 llm_local_nomic_embed:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/nomic-embed-default
     conf:
@@ -58,6 +67,7 @@ llm_local_nomic_embed:
 
 llm_local_qwen3_5_2b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3.5-2b-balanced
     conf:
@@ -65,6 +75,7 @@ llm_local_qwen3_5_2b:
 
 llm_local_qwen3_5_4b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3.5-4b-quality
     conf:
@@ -72,6 +83,7 @@ llm_local_qwen3_5_4b:
 
 llm_local_qwen3_4b_text:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3-4b-text
     conf:
@@ -79,6 +91,7 @@ llm_local_qwen3_4b_text:
 
 llm_local_gemma3_4b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/gemma-3-4b-it
     conf:
@@ -89,6 +102,7 @@ llm_local_gemma3_4b:
 
 llm_openai:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: gpt-5.4
 
@@ -98,18 +112,19 @@ llm_openai:
 llm_anthropic_sonnet:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   properties:
-    model: claude-sonnet-4-6
+    model: anthropic/claude-sonnet-4-6-20260301
 
 llm_anthropic_opus:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   properties:
-    model: claude-opus-4-5
+    model: anthropic/claude-opus-4-6-20260301
 
 # --- Google Gemini (AI Studio) ---
 # Requires: GEMINI_API_KEY
 
 llm_gemini:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+  provided_type: rustic_ai.core.llm.LLM
   properties:
     model: gemini/gemini-3.1
 
