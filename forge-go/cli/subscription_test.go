@@ -30,8 +30,8 @@ func newFakeSubscription() *fakeSubscription {
 }
 
 func (f *fakeSubscription) Channel() <-chan messaging.SubMessage { return f.ch }
-func (f *fakeSubscription) ErrChannel() <-chan error            { return f.errCh }
-func (f *fakeSubscription) Close() error                        { return nil }
+func (f *fakeSubscription) ErrChannel() <-chan error             { return f.errCh }
+func (f *fakeSubscription) Close() error                         { return nil }
 
 // closeSource simulates the underlying transport closing its delivery channels.
 func (f *fakeSubscription) closeSource() {
