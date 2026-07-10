@@ -1395,6 +1395,15 @@ func handleLaunchGuildFromBlueprint(s store.Store, pusher protocol.ControlPusher
 			ReplyError(w, http.StatusUnprocessableEntity, "invalid guild spec")
 			return
 		}
+		// Resolve mustache {{ }} placeholders from the (merged) configuration bag,
+		// mirroring the Python API server's GuildBuilder._from_spec_dict(...) at
+		// launch. Without this, placeholders leak into the launched guild spec.
+		rendered, err := guild.RenderConfiguration(&guildSpec)
+		if err != nil {
+			ReplyError(w, http.StatusUnprocessableEntity, "invalid guild spec: "+err.Error())
+			return
+		}
+		guildSpec = *rendered
 		if req.GuildID != nil {
 			guildSpec.ID = *req.GuildID
 		}

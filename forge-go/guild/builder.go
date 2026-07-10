@@ -381,6 +381,23 @@ func (b *GuildBuilder) mergeDependencyMap(configPath string) error {
 	return nil
 }
 
+// RenderConfiguration substitutes the spec's Configuration bag into its agents
+// and routing steps via mustache, returning the rendered spec. It is the
+// launch-time counterpart of Python's GuildBuilder._from_spec_dict rendering:
+// unlike BuildSpec it applies no defaults, merges no dependencies, and runs no
+// validation — it only resolves {{ }} placeholders. With an empty Configuration
+// it is a no-op, so callers can invoke it unconditionally.
+func RenderConfiguration(spec *protocol.GuildSpec) (*protocol.GuildSpec, error) {
+	b := GuildBuilderFromSpec(spec)
+	if b.err != nil {
+		return nil, b.err
+	}
+	if err := b.resolveTemplates(); err != nil {
+		return nil, err
+	}
+	return &b.spec, nil
+}
+
 func (b *GuildBuilder) resolveTemplates() error {
 	if len(b.spec.Configuration) == 0 {
 		return nil
