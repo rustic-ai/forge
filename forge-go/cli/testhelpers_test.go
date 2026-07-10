@@ -65,3 +65,11 @@ func newHTTPRuntime(t *testing.T, handler http.Handler) *GuildRuntime {
 func statusKey(guildID, agentID string) string {
 	return "forge:agent:status:" + guildID + ":" + agentID
 }
+
+// seedStatus writes value at key in mr, failing the test if the seed fails.
+func seedStatus(t *testing.T, mr *miniredis.Miniredis, key, value string) {
+	t.Helper()
+	if err := mr.Set(key, value); err != nil {
+		t.Fatalf("seed %s: %v", key, err)
+	}
+}

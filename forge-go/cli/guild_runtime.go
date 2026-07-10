@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -157,7 +156,9 @@ func (r *GuildRuntime) Start() error {
 	// Create server command
 	cmd := exec.Command(binPath, args...)
 	cmd.Dir = r.config.ForgeRoot
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Put the server in its own process group so teardown can signal the whole
+	// tree at once. Platform-specific; a no-op on systems without process groups.
+	setProcessGroup(cmd)
 
 	// Redirect server logs to temp files to avoid cluttering the CLI
 	// Only show them if there's an error
@@ -578,12 +579,10 @@ func (r *GuildRuntime) postJSON(url string, payload, result any) error {
 
 func (r *GuildRuntime) kill() {
 	if r.serverCmd != nil && r.serverCmd.Process != nil {
-		// SIGKILL the whole process group (the server is started with Setpgid).
-		// Both calls are best-effort during teardown: log failures rather than
-		// propagate, since there is nothing left to recover.
-		if err := syscall.Kill(-r.serverCmd.Process.Pid, syscall.SIGKILL); err != nil {
-			slog.Debug("failed to signal server process group", "error", err)
-		}
+		// Best-effort teardown: signal the server (its whole process group where
+		// supported), then reap it. Failures are logged rather than propagated,
+		// since there is nothing left to recover.
+		killProcessGroup(r.serverCmd)
 		if err := r.serverCmd.Wait(); err != nil {
 			slog.Debug("server process exited with error", "error", err)
 		}

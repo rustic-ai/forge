@@ -15,11 +15,11 @@ import (
 func TestGetAgentStatuses(t *testing.T) {
 	r, mr := newMiniredisRuntime(t)
 	guildID := "g1"
-	mr.Set(statusKey(guildID, "g1#manager_agent"), `{"state":"running","pid":42}`)
-	mr.Set(statusKey(guildID, "EchoAgent-abc"), `{"state":"starting","pid":7}`)
-	mr.Set(statusKey(guildID, "broken"), `not-json`)
+	seedStatus(t, mr, statusKey(guildID, "g1#manager_agent"), `{"state":"running","pid":42}`)
+	seedStatus(t, mr, statusKey(guildID, "EchoAgent-abc"), `{"state":"starting","pid":7}`)
+	seedStatus(t, mr, statusKey(guildID, "broken"), `not-json`)
 	// A key for a different guild must not be returned.
-	mr.Set(statusKey("other", "x"), `{"state":"running","pid":1}`)
+	seedStatus(t, mr, statusKey("other", "x"), `{"state":"running","pid":1}`)
 
 	statuses, err := r.GetAgentStatuses(guildID)
 	if err != nil {
@@ -40,8 +40,8 @@ func TestBuildAgentNameMap_UniqueMatchAndManager(t *testing.T) {
 	r, mr := newMiniredisRuntime(t)
 	guildID := "g1"
 	spec := &protocol.GuildSpec{Name: "Echo", Agents: []protocol.AgentSpec{{Name: "EchoAgent"}}}
-	mr.Set(statusKey(guildID, guildID+"#manager_agent"), `{"state":"running","pid":1}`)
-	mr.Set(statusKey(guildID, "EchoAgent-xyz"), `{"state":"running","pid":2}`)
+	seedStatus(t, mr, statusKey(guildID, guildID+"#manager_agent"), `{"state":"running","pid":1}`)
+	seedStatus(t, mr, statusKey(guildID, "EchoAgent-xyz"), `{"state":"running","pid":2}`)
 
 	r.buildAgentNameMap(guildID, spec)
 
@@ -58,7 +58,7 @@ func TestBuildAgentNameMap_AmbiguousFallsBackToID(t *testing.T) {
 	guildID := "g1"
 	// Both agent names are substrings of the runtime ID -> ambiguous -> no mapping.
 	spec := &protocol.GuildSpec{Name: "G", Agents: []protocol.AgentSpec{{Name: "Foo"}, {Name: "Bar"}}}
-	mr.Set(statusKey(guildID, "FooBar-1"), `{"state":"running","pid":1}`)
+	seedStatus(t, mr, statusKey(guildID, "FooBar-1"), `{"state":"running","pid":1}`)
 
 	r.buildAgentNameMap(guildID, spec)
 
@@ -81,7 +81,7 @@ func TestGetAgentName_Fallback(t *testing.T) {
 func TestWaitForGuildRunning(t *testing.T) {
 	r, mr := newMiniredisRuntime(t)
 	guildID := "g1"
-	mr.Set(statusKey(guildID, "a1"), `{"state":"running","pid":1}`)
+	seedStatus(t, mr, statusKey(guildID, "a1"), `{"state":"running","pid":1}`)
 
 	if err := r.waitForGuildRunning(guildID, 2*time.Second); err != nil {
 		t.Errorf("expected running guild to succeed, got %v", err)
@@ -195,7 +195,7 @@ func TestLaunchGuild(t *testing.T) {
 	r.redisClient = newRedisClient(t, mr)
 	// Pre-seed the launched guild's agent as running so waitForGuildRunning
 	// returns immediately.
-	mr.Set(statusKey("guild-1", "guild-1#manager_agent"), `{"state":"running","pid":1}`)
+	seedStatus(t, mr, statusKey("guild-1", "guild-1#manager_agent"), `{"state":"running","pid":1}`)
 
 	spec := &protocol.GuildSpec{Name: "Echo", Agents: []protocol.AgentSpec{{Name: "EchoAgent"}}}
 	guildID, err := r.LaunchGuild(spec)

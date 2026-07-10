@@ -88,7 +88,7 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create runtime: %w", err)
 	}
-	defer runtime.Shutdown()
+	defer func() { _ = runtime.Shutdown() }()
 
 	if !guildQuiet {
 		fmt.Println("⚙️  Starting embedded forge server...")
