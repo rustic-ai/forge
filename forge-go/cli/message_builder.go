@@ -10,21 +10,24 @@ import (
 
 var (
 	idGen     *protocol.GemstoneGenerator
+	idGenErr  error
 	idGenOnce sync.Once
 )
 
-func getIDGen() *protocol.GemstoneGenerator {
+func getIDGen() (*protocol.GemstoneGenerator, error) {
 	idGenOnce.Do(func() {
 		// Use machine ID 1 for CLI
-		gen, _ := protocol.NewGemstoneGenerator(1)
-		idGen = gen
+		idGen, idGenErr = protocol.NewGemstoneGenerator(1)
 	})
-	return idGen
+	return idGen, idGenErr
 }
 
 // BuildChatMessage creates a chatCompletionRequest message
 func BuildChatMessage(userID, userName, text, topic string) (*protocol.Message, error) {
-	gen := getIDGen()
+	gen, err := getIDGen()
+	if err != nil {
+		return nil, fmt.Errorf("failed to init ID generator: %w", err)
+	}
 	msgID, err := gen.Generate(protocol.PriorityNormal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate message ID: %w", err)
@@ -51,11 +54,14 @@ func BuildChatMessage(userID, userName, text, topic string) (*protocol.Message, 
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	convID, _ := gen.Generate(protocol.PriorityNormal)
+	convID, err := gen.Generate(protocol.PriorityNormal)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate conversation ID: %w", err)
+	}
 	convIDInt := convID.ToInt()
 
 	msg := protocol.NewMessageFromGemstoneID(msgID)
-	msg.Format = "rustic_ai.core.guild.agent_ext.depends.llm.models.ChatCompletionRequest"  // Use full format to match routing rules
+	msg.Format = "rustic_ai.core.guild.agent_ext.depends.llm.models.ChatCompletionRequest" // Use full format to match routing rules
 	msg.Sender = protocol.AgentTag{
 		ID:   &userID,
 		Name: &userName,
@@ -69,7 +75,10 @@ func BuildChatMessage(userID, userName, text, topic string) (*protocol.Message, 
 
 // BuildSystemMessage creates a system message
 func BuildSystemMessage(topic string, payload map[string]interface{}, format string) (*protocol.Message, error) {
-	gen := getIDGen()
+	gen, err := getIDGen()
+	if err != nil {
+		return nil, fmt.Errorf("failed to init ID generator: %w", err)
+	}
 	msgID, err := gen.Generate(protocol.PriorityNormal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate message ID: %w", err)
@@ -103,7 +112,10 @@ func ParseMessageFromJSON(data []byte) (*protocol.Message, error) {
 
 // BuildHealthCheckMessage creates a health check message
 func BuildHealthCheckMessage(userID, topic string) (*protocol.Message, error) {
-	gen := getIDGen()
+	gen, err := getIDGen()
+	if err != nil {
+		return nil, fmt.Errorf("failed to init ID generator: %w", err)
+	}
 	msgID, err := gen.Generate(protocol.PriorityNormal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate message ID: %w", err)
@@ -117,7 +129,10 @@ func BuildHealthCheckMessage(userID, topic string) (*protocol.Message, error) {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	convID, _ := gen.Generate(protocol.PriorityNormal)
+	convID, err := gen.Generate(protocol.PriorityNormal)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate conversation ID: %w", err)
+	}
 	convIDInt := convID.ToInt()
 
 	msg := protocol.NewMessageFromGemstoneID(msgID)
@@ -135,7 +150,10 @@ func BuildHealthCheckMessage(userID, topic string) (*protocol.Message, error) {
 // BuildWrappedChatMessage creates a wrapped chat message for UserProxyAgent
 // This mimics how the gateway wraps user messages before sending them to user:{userID}
 func BuildWrappedChatMessage(userID, userName, text string) (*protocol.Message, error) {
-	gen := getIDGen()
+	gen, err := getIDGen()
+	if err != nil {
+		return nil, fmt.Errorf("failed to init ID generator: %w", err)
+	}
 
 	// Create the inner chat message
 	innerMsg, err := BuildChatMessage(userID, userName, text, "default_topic")
@@ -173,7 +191,10 @@ func BuildWrappedChatMessage(userID, userName, text string) (*protocol.Message, 
 // BuildUserProxyCreationRequest creates a UserAgentCreationRequest message
 // This triggers the manager to create a UserProxyAgent for the user
 func BuildUserProxyCreationRequest(userID, userName string) (*protocol.Message, error) {
-	gen := getIDGen()
+	gen, err := getIDGen()
+	if err != nil {
+		return nil, fmt.Errorf("failed to init ID generator: %w", err)
+	}
 	msgID, err := gen.Generate(protocol.PriorityNormal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate message ID: %w", err)

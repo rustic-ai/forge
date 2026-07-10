@@ -48,7 +48,7 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 		UserID:           guildUserID,
 		UserName:         guildUserName,
 		ForgeRoot:        forgeRepoRoot,
-		DependencyConfig: filepath.Join(forgeRoot, "conf", "dependencies.yaml"),
+		DependencyConfig: filepath.Join(forgeRoot, "conf", "agent-dependencies.yaml"),
 		AgentRegistry:    filepath.Join(forgeRoot, "conf", "forge-agent-registry.yaml"),
 		ForgePythonPath:  filepath.Join(forgeRepoRoot, "forge-python"),
 		SupervisorType:   guildSupervisor,
@@ -173,7 +173,7 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 			if err == nil {
 				for agentID := range statuses {
 					agentName := runtime.GetAgentName(agentID)
-					if strings.Contains(agentName, "test-user") || strings.Contains(agentID, "upa-") {
+					if strings.Contains(agentName, config.UserID) || strings.Contains(agentID, "upa-") {
 						userProxyCreated = true
 						if guildVerbose {
 							fmt.Printf("   UserProxyAgent created: %s\n", agentName)
@@ -428,7 +428,9 @@ func printMessage(msg *protocol.Message, runtime *cli.GuildRuntime, spec *protoc
 		}
 	}
 
-	timestamp := time.Unix(int64(msg.Timestamp), 0).Format("15:04:05")
+	// msg.Timestamp is milliseconds since the Unix epoch (derived from the
+	// GemstoneID clock, which uses UnixMilli), so decode it as milliseconds.
+	timestamp := time.UnixMilli(int64(msg.Timestamp)).Format("15:04:05")
 	topicStr := strings.Join(topics, ", ")
 
 	// Message header

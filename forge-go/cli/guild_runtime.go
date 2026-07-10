@@ -25,34 +25,34 @@ import (
 
 // RuntimeConfig holds configuration for the guild runtime
 type RuntimeConfig struct {
-	Backend           string   // "redis" or "nats"
-	OrgID             string   // Organization ID
-	UserID            string   // User ID for sending messages
-	UserName          string   // User name for sending messages
-	ForgeHome         string   // Forge home directory (optional)
-	ForgeRoot         string   // Forge repository root
-	DependencyConfig  string   // Path to dependency config
-	AgentRegistry     string   // Path to agent registry
-	ForgePythonPath   string   // Path to forge-python package
-	NATSUrl           string   // NATS server URL (if using NATS backend)
-	SupervisorType    string   // "process", "docker", or "bubblewrap"
-	PythonPath        string   // Path to Python executable (optional, will auto-detect)
+	Backend          string // "redis" or "nats"
+	OrgID            string // Organization ID
+	UserID           string // User ID for sending messages
+	UserName         string // User name for sending messages
+	ForgeHome        string // Forge home directory (optional)
+	ForgeRoot        string // Forge repository root
+	DependencyConfig string // Path to dependency config
+	AgentRegistry    string // Path to agent registry
+	ForgePythonPath  string // Path to forge-python package
+	NATSUrl          string // NATS server URL (if using NATS backend)
+	SupervisorType   string // "process", "docker", or "bubblewrap"
+	PythonPath       string // Path to Python executable (optional, will auto-detect)
 }
 
 // GuildRuntime manages an embedded forge runtime for running guilds
 type GuildRuntime struct {
-	config         RuntimeConfig
-	serverCmd      *exec.Cmd
-	serverBase     string
-	rusticBase     string
-	redisAddr      string
-	redisClient    *redis.Client
-	tempDir        string
-	dbPath         string
-	dataDir        string
-	ctx            context.Context
-	cancel         context.CancelFunc
-	agentNames     map[string]string // Maps agent ID to agent name
+	config      RuntimeConfig
+	serverCmd   *exec.Cmd
+	serverBase  string
+	rusticBase  string
+	redisAddr   string
+	redisClient *redis.Client
+	tempDir     string
+	dbPath      string
+	dataDir     string
+	ctx         context.Context
+	cancel      context.CancelFunc
+	agentNames  map[string]string // Maps agent ID to agent name
 }
 
 // AgentStatus represents the status of an agent
@@ -259,7 +259,7 @@ func (r *GuildRuntime) seedAgentRegistry() error {
 		// Convert to catalog agent entry format
 		agentEntry := map[string]interface{}{
 			"qualified_class_name": className,
-			"agent_name":           agent["id"],  // API expects agent_name
+			"agent_name":           agent["id"], // API expects agent_name
 			"agent_doc":            agent["description"],
 			"agent_props_schema":   map[string]interface{}{}, // Empty schema for now
 			"message_handlers":     map[string]interface{}{}, // Empty for now
@@ -355,24 +355,27 @@ func (r *GuildRuntime) buildAgentNameMap(guildID string, spec *protocol.GuildSpe
 		return
 	}
 
-	// Map agent names from spec
-	agentsByName := make(map[string]string)
-	for _, agent := range spec.Agents {
-		agentsByName[agent.Name] = agent.Name
-	}
-
-	// Try to match IDs to names (this is approximate since we don't have the actual mapping)
-	// Store what we know
+	// Map running agent IDs to their spec names. Agent IDs embed the agent name
+	// (e.g. "<guild>#<agent_name>"), so match on that rather than guessing by
+	// index: the previous implementation assigned spec.Agents[0].Name to every
+	// non-manager agent, mislabeling every guild with more than one agent. When
+	// the match is not unique we leave the ID unmapped and GetAgentName falls
+	// back to the raw ID instead of asserting a wrong name.
 	for agentID := range statuses {
-		// Check if this is the manager agent
 		if agentID == guildID+"#manager_agent" {
 			continue
 		}
 
-		// For now, try to find matching agent from spec by index
-		// In a real scenario, we'd need to query the guild API for the actual mapping
-		if len(spec.Agents) > 0 {
-			r.agentNames[agentID] = spec.Agents[0].Name
+		matched := ""
+		matches := 0
+		for _, agent := range spec.Agents {
+			if agent.Name != "" && strings.Contains(agentID, agent.Name) {
+				matched = agent.Name
+				matches++
+			}
+		}
+		if matches == 1 {
+			r.agentNames[agentID] = matched
 		}
 	}
 }
@@ -503,7 +506,7 @@ func (r *GuildRuntime) createBlueprint(spec *protocol.GuildSpec) (map[string]int
 	blueprint := map[string]interface{}{
 		"name":            spec.Name,
 		"description":     spec.Description,
-		"spec":            spec, // API expects "spec" not "guild_spec"
+		"spec":            spec,     // API expects "spec" not "guild_spec"
 		"exposure":        "public", // Make it public so we can launch it
 		"author_id":       r.config.UserID,
 		"organization_id": r.config.OrgID,
