@@ -25,6 +25,7 @@ var (
 	clientDefaultSupervisor string
 	clientDefaultTransport  string
 	clientZMQBridgeMode     string
+	clientUVPython          string
 )
 
 func init() {
@@ -40,6 +41,7 @@ func init() {
 	ClientCmd.Flags().StringVar(&clientDefaultSupervisor, "default-supervisor", "", "Force a specific supervisor (docker, bwrap) for all agents on this node")
 	ClientCmd.Flags().StringVar(&clientDefaultTransport, "default-agent-transport", "direct", `Default local agent dataplane transport (direct, supervisor-zmq)`)
 	ClientCmd.Flags().StringVar(&clientZMQBridgeMode, "zmq-bridge-mode", "ipc", `ZMQ bridge transport for non-process supervisors: "ipc" or "tcp"`)
+	ClientCmd.Flags().StringVar(&clientUVPython, "uv-python", "", `Python interpreter to pin uv/uvx to when spawning Python agents (e.g. "3.13" or ">=3.13,<3.14"); empty lets uv choose`)
 
 	RootCmd.AddCommand(ClientCmd)
 }
@@ -52,6 +54,12 @@ var ClientCmd = &cobra.Command{
 		out := os.Stdout
 		l := logging.NewLogger(out, logLevel)
 		logging.SetGlobalLogger(l)
+
+		// Pin the interpreter uv/uvx uses for Python agents. registry.ResolveCommand
+		// (run in this node process) reads FORGE_UV_PYTHON.
+		if clientUVPython != "" {
+			_ = os.Setenv("FORGE_UV_PYTHON", clientUVPython)
+		}
 
 		if clientNodeID == "" {
 			hostname, err := os.Hostname()

@@ -70,6 +70,7 @@ func runGuildREPL(cmd *cobra.Command, args []string) error {
 		ForgePythonPath:  filepath.Join(forgeRepoRoot, "forge-python"),
 		SupervisorType:   guildSupervisor,
 		PythonPath:       pythonPath,
+		UVPython:         guildUVPython,
 	}
 
 	if !guildQuiet {

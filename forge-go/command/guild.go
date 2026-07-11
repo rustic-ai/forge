@@ -11,6 +11,7 @@ var (
 	guildUserName    string
 	guildSupervisor  string
 	guildPython      string
+	guildUVPython    string
 	guildVerbose     bool
 	guildShowRouting bool
 	guildQuiet       bool
@@ -80,6 +81,7 @@ func init() {
 	guildRunCmd.Flags().StringVar(&guildUserName, "user-name", "Test User", "User name")
 	guildRunCmd.Flags().StringVar(&guildSupervisor, "supervisor", "process", "Supervisor type (process|docker|bubblewrap)")
 	guildRunCmd.Flags().StringVar(&guildPython, "python", "", "Python executable path (auto-detected if not specified)")
+	guildRunCmd.Flags().StringVar(&guildUVPython, "uv-python", "", `Python interpreter to pin uv/uvx to when spawning agents (e.g. "3.13" or ">=3.13,<3.14"); empty lets uv choose`)
 	guildRunCmd.Flags().BoolVarP(&guildVerbose, "verbose", "v", false, "Verbose output (show full message details)")
 	guildRunCmd.Flags().BoolVarP(&guildQuiet, "quiet", "q", false, "Quiet mode (minimal startup output)")
 	guildRunCmd.Flags().BoolVar(&guildShowRouting, "show-routing", true, "Show routing decisions and transformations")

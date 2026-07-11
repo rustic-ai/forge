@@ -44,6 +44,7 @@ type RuntimeConfig struct {
 	NATSUrl          string // NATS server URL (if using NATS backend)
 	SupervisorType   string // "process", "docker", or "bubblewrap"
 	PythonPath       string // Path to Python executable (optional, will auto-detect)
+	UVPython         string // Interpreter to pin uv/uvx to for agents (e.g. "3.13"); empty lets uv choose
 }
 
 // GuildRuntime manages an embedded forge runtime for running guilds
@@ -185,6 +186,11 @@ func (r *GuildRuntime) Start() error {
 		}
 	} else {
 		args = append(args, "--embedded-redis-addr", brokerAddr)
+	}
+
+	// Pin the interpreter uv/uvx uses for Python agents, if requested.
+	if r.config.UVPython != "" {
+		args = append(args, "--uv-python", r.config.UVPython)
 	}
 
 	// Create server command

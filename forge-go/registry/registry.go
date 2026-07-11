@@ -163,6 +163,9 @@ func ResolveCommand(entry *AgentRegistryEntry) []string {
 	switch entry.Runtime {
 	case RuntimeUVX:
 		cmd = append(cmd, ResolveUVXCommand())
+		if py := UVPython(); py != "" {
+			cmd = append(cmd, "--python", py)
+		}
 		forgePkg := os.Getenv("FORGE_PYTHON_PKG")
 		if forgePkg == "" {
 			forgePkg = "rusticai-forge"
@@ -198,8 +201,22 @@ func ResolveCommand(entry *AgentRegistryEntry) []string {
 		}
 
 	default:
-		cmd = append(cmd, ResolveUVXCommand(), "python", "-m", "rustic_ai.forge.agent_runner")
+		cmd = append(cmd, ResolveUVXCommand())
+		if py := UVPython(); py != "" {
+			cmd = append(cmd, "--python", py)
+		}
+		cmd = append(cmd, "python", "-m", "rustic_ai.forge.agent_runner")
 	}
 
 	return cmd
+}
+
+// UVPython returns the interpreter request used to pin uv/uvx when spawning
+// Python agents (passed as `uvx --python <value> …`). The value is a uv Python
+// request: a bare version like "3.13", a constraint like ">=3.13,<3.14", or an
+// absolute interpreter path. It is sourced from FORGE_UV_PYTHON, which the
+// server/client/CLI set from their --uv-python flags. Empty means "let uv pick"
+// (uv's default discovery), preserving prior behaviour.
+func UVPython() string {
+	return strings.TrimSpace(os.Getenv("FORGE_UV_PYTHON"))
 }

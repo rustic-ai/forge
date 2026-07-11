@@ -33,6 +33,7 @@ var (
 	serverClientZMQBridgeMode string
 	serverBackend             string
 	serverEmbeddedNATSAddr    string
+	serverUVPython            string
 	serverStateStore          string
 	serverTelemetryEnabled    bool
 	serverTelemetryMode       string
@@ -65,6 +66,7 @@ func init() {
 	ServerCmd.Flags().StringVar(&serverClientZMQBridgeMode, "client-zmq-bridge-mode", "ipc", `ZMQ bridge transport for non-process supervisors: "ipc" or "tcp"`)
 	ServerCmd.Flags().StringVar(&serverBackend, "backend", "redis", `Messaging backend: "redis" or "nats"`)
 	ServerCmd.Flags().StringVar(&serverEmbeddedNATSAddr, "embedded-nats-addr", "", "Bind address for embedded NATS (default: ephemeral port)")
+	ServerCmd.Flags().StringVar(&serverUVPython, "uv-python", "", `Python interpreter to pin uv/uvx to when spawning Python agents (e.g. "3.13" or ">=3.13,<3.14"); empty lets uv choose`)
 	ServerCmd.Flags().StringVar(&serverStateStore, "state-store", "", `State store backend: "diskcache" (default: in-memory)`)
 	ServerCmd.Flags().BoolVar(&serverTelemetryEnabled, "otel-enabled", false, "Enable OpenTelemetry export from Forge server")
 	ServerCmd.Flags().StringVar(&serverTelemetryMode, "otel-mode", "desktop_sqlite", `Telemetry backend mode: "desktop_sqlite" or "external_otlp"`)
@@ -86,6 +88,12 @@ var ServerCmd = &cobra.Command{
 		out := os.Stdout
 		l := logging.NewLogger(out, logLevel)
 		logging.SetGlobalLogger(l)
+
+		// Pin the interpreter uv/uvx uses for Python agents. registry.ResolveCommand
+		// (run in this process, incl. the in-process client) reads FORGE_UV_PYTHON.
+		if serverUVPython != "" {
+			_ = os.Setenv("FORGE_UV_PYTHON", serverUVPython)
+		}
 
 		db := serverDB
 		if db == "" {
