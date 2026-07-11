@@ -33,6 +33,11 @@ kb_backend:
 # ---------------------------------------------------------------------------
 # LLM Dependencies
 # ---------------------------------------------------------------------------
+# NOTE: LiteLLMResolver.__init__(model, conf={}) accepts only `model` plus a
+# `conf` dict; all other connection settings (base_url, api_version,
+# vertex_project, custom_llm_provider, ...) must be nested under `conf:` or the
+# resolver raises TypeError on instantiation. This mirrors the `textsplitter`
+# entry above.
 
 # --- Local llama.cpp server (OpenAI-compatible, port 55262) ---
 
@@ -41,49 +46,56 @@ llm:
   provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3.5-0.8b-starter
-    base_url: http://localhost:55262/v1
+    conf:
+      base_url: http://localhost:55262/v1
 
 llm_local_qwen3_5_0_8b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3.5-0.8b-starter
-    base_url: http://localhost:55262/v1
+    conf:
+      base_url: http://localhost:55262/v1
 
 llm_local_nomic_embed:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/nomic-embed-default
-    base_url: http://localhost:55262/v1
+    conf:
+      base_url: http://localhost:55262/v1
 
 llm_local_qwen3_5_2b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3.5-2b-balanced
-    base_url: http://localhost:55262/v1
+    conf:
+      base_url: http://localhost:55262/v1
 
 llm_local_qwen3_5_4b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3.5-4b-quality
-    base_url: http://localhost:55262/v1
+    conf:
+      base_url: http://localhost:55262/v1
 
 llm_local_qwen3_4b_text:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/qwen3-4b-text
-    base_url: http://localhost:55262/v1
+    conf:
+      base_url: http://localhost:55262/v1
 
 llm_local_gemma3_4b:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   provided_type: rustic_ai.core.llm.LLM
   properties:
     model: openai/rustic/gemma-3-4b-it
-    base_url: http://localhost:55262/v1
+    conf:
+      base_url: http://localhost:55262/v1
 
 # --- OpenAI ---
 # Requires: OPENAI_API_KEY
@@ -123,8 +135,9 @@ llm_vertexai:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   properties:
     model: vertex_ai/gemini-3.1
-    vertex_project: null
-    vertex_location: null
+    conf:
+      vertex_project: null
+      vertex_location: null
 
 # --- AWS Bedrock ---
 # Requires: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION_NAME
@@ -133,7 +146,8 @@ llm_bedrock:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   properties:
     model: bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
-    custom_llm_provider: bedrock
+    conf:
+      custom_llm_provider: bedrock
 
 # --- Azure OpenAI ---
 # Requires: AZURE_API_KEY, AZURE_API_BASE, AZURE_API_VERSION
@@ -142,8 +156,9 @@ llm_azure:
   class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
   properties:
     model: azure/<your-deployment-name>
-    base_url: null
-    api_version: "2024-06-01"
+    conf:
+      base_url: null
+      api_version: "2024-06-01"
 
 # --- Cohere ---
 # Requires: COHERE_API_KEY
