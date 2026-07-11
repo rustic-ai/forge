@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	gopsprocess "github.com/shirou/gopsutil/v3/process"
+	gopsprocess "github.com/shirou/gopsutil/v4/process"
 )
 
 func configureCommandForProcessGroup(cmd *exec.Cmd, detach bool) {

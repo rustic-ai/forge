@@ -15,7 +15,7 @@ import (
 	"github.com/rustic-ai/forge/forge-go/infraevents"
 	"github.com/rustic-ai/forge/forge-go/messaging"
 	"github.com/rustic-ai/forge/forge-go/protocol"
-	gopsprocess "github.com/shirou/gopsutil/v3/process"
+	gopsprocess "github.com/shirou/gopsutil/v4/process"
 	"github.com/stretchr/testify/require"
 )
 
