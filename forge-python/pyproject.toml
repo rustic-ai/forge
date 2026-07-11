@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "nats-py>=2.9.0,<3.0.0",
-    "pyzmq>=26.0.0,<27.0.0",
+    "pyzmq>=26.0.0,<28.0.0",
     # DO NOT CHANGE THESE TO LOCAL FILE PATHS. Always use package references.
     "rusticai-core>=1.2.0,<2.0.0",
     "rusticai-redis>=1.1.0,<2.0.0",
@@ -18,7 +18,7 @@ dev = [
     "pytest>=9.0.2,<10.0.0",
     "pytest-xdist>=3.5.0,<4.0.0",
     "requests>=2.33.0,<3.0.0",
-    "ruff>=0.13.1,<0.14.0",
+    "ruff>=0.13.1,<0.16.0",
 ]
 
 [build-system]
