@@ -372,28 +372,33 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 	}
 
 	if pSup, ok := sup.(*supervisor.ProcessSupervisor); ok {
-		if status, _ := pSup.Status(ctx, req.GuildID, req.AgentSpec.ID); status == "running" {
-			nodeID, _ := os.Hostname()
-			if nodeID == "" {
-				nodeID = "localhost"
-			}
-			msg.NodeID = nodeID
+		nodeID, _ := os.Hostname()
+		if nodeID == "" {
+			nodeID = "localhost"
+		}
+		msg.NodeID = nodeID
 
-			for retries := 0; retries < 5; retries++ {
-				actualPid, err := pSup.GetPID(ctx, req.GuildID, req.AgentSpec.ID)
-				if err == nil && actualPid > 0 {
-					msg.PID = actualPid
-					break
-				}
-				time.Sleep(100 * time.Millisecond)
+		// The launch succeeded, so a PID exists. Prefer the live PID, but fall
+		// back to the PID captured at launch: a short-lived agent may already
+		// have exited (clearing the live PID and flipping state to restarting)
+		// by the time we read it, and we must not report success with PID 0.
+		for retries := 0; retries < 5; retries++ {
+			if pid, err := pSup.GetPID(ctx, req.GuildID, req.AgentSpec.ID); err == nil && pid > 0 {
+				msg.PID = pid
+				break
 			}
+			if pid, err := pSup.GetLaunchPID(ctx, req.GuildID, req.AgentSpec.ID); err == nil && pid > 0 {
+				msg.PID = pid
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 
-			if msg.PID <= 0 {
-				if !shouldSuppressSpawnResponse(req) {
-					h.sendError(ctx, req.RequestID, "timed out waiting to retrieve valid PID for spawned agent")
-				}
-				return
+		if msg.PID <= 0 {
+			if !shouldSuppressSpawnResponse(req) {
+				h.sendError(ctx, req.RequestID, "timed out waiting to retrieve valid PID for spawned agent")
 			}
+			return
 		}
 	}
 

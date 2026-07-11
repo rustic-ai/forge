@@ -23,6 +23,7 @@ type ManagedAgent struct {
 	ID           string
 	State        AgentState
 	PID          int
+	LaunchPID    int
 	RestartCount int
 	LastError    error
 
@@ -59,6 +60,13 @@ func (m *ManagedAgent) SetPID(pid int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.PID = pid
+	if pid > 0 {
+		// LaunchPID records the PID of the most recent launch and, unlike PID,
+		// is not cleared when the process exits. It lets a spawn response report
+		// the PID it launched even for a short-lived agent that has already
+		// exited by the time the response is built.
+		m.LaunchPID = pid
+	}
 	m.StartedAt = time.Now()
 }
 
@@ -72,6 +80,14 @@ func (m *ManagedAgent) GetPID() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.PID
+}
+
+// GetLaunchPID returns the PID captured at the most recent launch. It remains
+// valid after the process exits (until the next launch overwrites it).
+func (m *ManagedAgent) GetLaunchPID() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.LaunchPID
 }
 
 func (m *ManagedAgent) RequestStop() {

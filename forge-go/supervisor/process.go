@@ -540,6 +540,22 @@ func (p *ProcessSupervisor) GetPID(ctx context.Context, guildID, agentID string)
 	return agent.GetPID(), nil
 }
 
+// GetLaunchPID returns the PID captured at the agent's most recent launch, which
+// stays valid even after a short-lived process exits (unlike GetPID, which is
+// cleared on exit).
+func (p *ProcessSupervisor) GetLaunchPID(ctx context.Context, guildID, agentID string) (int, error) {
+	key := scopedAgentKey(guildID, agentID)
+	p.mu.RLock()
+	agent, exists := p.agents[key]
+	p.mu.RUnlock()
+
+	if !exists {
+		return 0, fmt.Errorf("agent %s not managed in guild %s", agentID, normalizeGuildID(guildID))
+	}
+
+	return agent.GetLaunchPID(), nil
+}
+
 func (p *ProcessSupervisor) StopAll(ctx context.Context) error {
 	p.mu.RLock()
 	agents := make([]*ManagedAgent, 0, len(p.agents))
