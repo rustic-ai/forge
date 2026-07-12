@@ -1,6 +1,6 @@
 package supervisor
 
-import gopsprocess "github.com/shirou/gopsutil/v3/process"
+import gopsprocess "github.com/shirou/gopsutil/v4/process"
 
 func descendantPIDs(pid int) []int {
 	seen := map[int32]struct{}{}
