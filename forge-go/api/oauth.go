@@ -40,6 +40,11 @@ func (s *Server) registerOAuthRoutes(router *gin.Engine, prefix string) {
 	s.oauthRoutePrefix = prefix
 	router.GET(prefix+"/oauth/organizations/:org_id/providers", wrapHTTPWithPathValues(s.handleOAuthListProviders(), "org_id"))
 	router.POST(prefix+"/oauth/organizations/:org_id/providers/:provider_id/authorize", wrapHTTPWithPathValues(s.handleOAuthAuthorize(), "org_id", "provider_id"))
+	// Single, provider- and org-agnostic callback for every provider: the flow is
+	// identified entirely by the opaque state inside ExchangeCode.
+	router.GET(prefix+"/oauth/callback", wrapHTTP(s.handleOAuthCallback()))
+	// Backward-compat alias for providers registered with the older org-scoped
+	// callback URL. Shares the same state-driven handler.
 	router.GET(prefix+"/oauth/organizations/:org_id/providers/:provider_id/callback", wrapHTTPWithPathValues(s.handleOAuthCallback(), "org_id", "provider_id"))
 	router.GET(prefix+"/oauth/organizations/:org_id/providers/:provider_id/status", wrapHTTPWithPathValues(s.handleOAuthStatus(), "org_id", "provider_id"))
 	router.DELETE(prefix+"/oauth/organizations/:org_id/providers/:provider_id", wrapHTTPWithPathValues(s.handleOAuthDisconnect(), "org_id", "provider_id"))
@@ -68,8 +73,18 @@ func (s *Server) handleOAuthAuthorize() http.HandlerFunc {
 		if !decodeJSONBody(w, r, &req) {
 			return
 		}
-		if strings.TrimSpace(req.ClientID) == "" || strings.TrimSpace(req.ClientSecret) == "" {
-			ReplyError(w, http.StatusUnprocessableEntity, "clientId and clientSecret are required")
+		clientID := strings.TrimSpace(req.ClientID)
+		clientSecret := strings.TrimSpace(req.ClientSecret)
+		// Validation depends on the provider's auth mode. Static providers
+		// require caller-supplied credentials; providers using Dynamic Client
+		// Registration register their own and must not be sent any.
+		if s.oauthManager.RequiresClientCredentials(providerID) {
+			if clientID == "" || clientSecret == "" {
+				ReplyError(w, http.StatusUnprocessableEntity, "clientId and clientSecret are required")
+				return
+			}
+		} else if clientID != "" || clientSecret != "" {
+			ReplyError(w, http.StatusUnprocessableEntity, "this provider uses dynamic client registration; do not send clientId or clientSecret")
 			return
 		}
 
@@ -80,10 +95,12 @@ func (s *Server) handleOAuthAuthorize() http.HandlerFunc {
 		}
 		redirectURL := req.RedirectURL
 		if redirectURL == "" {
-			redirectURL = s.publicBaseURL() + s.oauthRoutePrefix + "/oauth/organizations/" + orgID + "/providers/" + providerID + "/callback"
+			// Single constant callback for all providers; the flow is identified
+			// by state at callback time.
+			redirectURL = s.publicBaseURL() + s.oauthRoutePrefix + "/oauth/callback"
 		}
 
-		authURL, _, err := s.oauthManager.GetAuthURL(orgID, providerID, req.ClientID, req.ClientSecret, redirectURL)
+		authURL, _, err := s.oauthManager.GetAuthURL(r.Context(), orgID, providerID, clientID, clientSecret, redirectURL)
 		if err != nil {
 			ReplyError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -98,7 +115,6 @@ func (s *Server) handleOAuthAuthorize() http.HandlerFunc {
 
 func (s *Server) handleOAuthCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		providerID := strings.TrimSpace(r.PathValue("provider_id"))
 		code := strings.TrimSpace(r.URL.Query().Get("code"))
 		state := strings.TrimSpace(r.URL.Query().Get("state"))
 
@@ -111,9 +127,10 @@ func (s *Server) handleOAuthCallback() http.HandlerFunc {
 			return
 		}
 
-		// userID is recovered from pendingFlow via state — no header needed here
-		// since the callback is driven by the browser redirect.
-		if err := s.oauthManager.ExchangeCode(r.Context(), code, state); err != nil {
+		// The org and provider are recovered from the pendingFlow via state, so
+		// the callback URL itself carries no path parameters.
+		providerID, err := s.oauthManager.ExchangeCode(r.Context(), code, state)
+		if err != nil {
 			writeCallbackPage(w, false, "Failed to connect: "+err.Error())
 			return
 		}

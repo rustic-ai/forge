@@ -5,12 +5,20 @@
 # are supplied at runtime by the caller (e.g. the Electron app) when initiating
 # the auth flow.
 #
-# For well-known providers (github, google, google-drive, slack, microsoft,
-# notion), auth_url and token_url are optional — Forge fills them in
-# automatically.
+# For well-known providers (github, google, google-drive, slack, microsoft),
+# auth_url and token_url are optional — Forge fills them in from the
+# golang.org/x/oauth2 library. For any other static provider, set auth_url and
+# token_url explicitly.
 #
 # use_pkce: controls PKCE (S256 code challenge). Defaults to true. Set to
 # false for providers that do not support it.
+#
+# Dynamic Client Registration (DCR / RFC 7591): for OAuth-protected resources
+# that support it (e.g. remote MCP servers), set use_dcrp: true and provide
+# resource_url. Forge discovers the auth/token/registration endpoints
+# (RFC 9728 + RFC 8414) and registers its own client on demand — no
+# client_id/client_secret needed. resource_url is only used in this mode; it is
+# not a general endpoint-discovery mechanism for traditional OAuth providers.
 #
 # Add a new provider by adding an entry under `providers`. Restart Forge after
 # editing this file.
@@ -28,11 +36,18 @@ providers:
 #    display_name: Slack
 #    description: Send messages and read channel history to integrate agents with your Slack workspace.
 #    scopes: [channels:history, channels:read, chat:write, files:read, users:read, team:read]
-#    use_pkce: false
-
-  # Custom service example — uncomment and fill in:
-  # my-service:
-  #   display_name: My Service
-  #   description: What this integration is used for.
-  #   auth_url: https://example.com/oauth/authorize
-  #   token_url: https://example.com/oauth/token
+#
+# Custom service example — uncomment and fill in:
+# my-service:
+#   display_name: My Service
+#   description: What this integration is used for.
+#   auth_url: https://example.com/oauth/authorize
+#   token_url: https://example.com/oauth/token
+#   use_pkce: false
+#
+#   Dynamic Client Registration example (e.g. a remote MCP server):
+#  notion-mcp:
+#    display_name: Notion (MCP)
+#    description: Connect to the Notion MCP server.
+#    resource_url: https://mcp.notion.com/mcp
+#    use_dcrp: true

@@ -27,7 +27,6 @@ type ServerConfig struct {
 	RaftBindAddr            string
 	GossipBindAddr          string
 	GossipJoinPeers         []string
-	OAuthTokenStore         string
 	StateStore              string
 	TelemetryEnabled        bool
 	TelemetryMode           string

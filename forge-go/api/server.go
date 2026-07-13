@@ -58,18 +58,14 @@ func NewServer(db store.Store, statusStore supervisor.AgentStatusStore, controlP
 	return s
 }
 
-// WithOAuth initialises OAuth support. kind selects the token store backend
-// ("memory" or "keychain"); if empty, FORGE_OAUTH_TOKEN_STORE is consulted.
-func (s *Server) WithOAuth(kind string) *Server {
-	if kind == "" {
-		kind = os.Getenv("FORGE_OAUTH_TOKEN_STORE")
-	}
+// WithOAuth initialises OAuth support. Both store backends are selected from the
+// environment: FORGE_OAUTH_TOKEN_STORE for tokens and FORGE_OAUTH_CLIENT_STORE for
+// DCR client credentials, each "memory" (default) or "keychain".
+func (s *Server) WithOAuth() *Server {
+	kind := os.Getenv("FORGE_OAUTH_TOKEN_STORE")
 	cfg, err := oauth.LoadProvidersConfig(forgepath.OAuthProvidersConfigPath())
 	if err != nil {
 		fmt.Printf("WARN: failed to load OAuth providers config: %v\n", err)
-		return s
-	}
-	if len(cfg.Providers) == 0 {
 		return s
 	}
 	store, err := oauth.NewTokenStore(kind)
@@ -77,7 +73,17 @@ func (s *Server) WithOAuth(kind string) *Server {
 		fmt.Printf("WARN: %v; falling back to in-memory token store\n", err)
 		store, _ = oauth.NewTokenStore("memory")
 	}
-	s.oauthManager = oauth.NewManagerWithStore(cfg, store)
+	// Client credentials use their own backend (empty -> in-memory).
+	credStore, err := oauth.NewClientCredentialsStore(os.Getenv("FORGE_OAUTH_CLIENT_STORE"))
+	if err != nil {
+		fmt.Printf("WARN: %v; falling back to in-memory client credentials store\n", err)
+		credStore, _ = oauth.NewClientCredentialsStore("memory")
+	}
+	// FORGE_OAUTH_CLIENT_NAME / FORGE_OAUTH_CLIENT_URI override the client_name
+	// and client_uri registered with DCR providers; empty keeps the defaults
+	// (name "Forge", uri omitted).
+	s.oauthManager = oauth.NewManagerWithStores(cfg, store, credStore,
+		oauth.WithDynamicClient(os.Getenv("FORGE_OAUTH_CLIENT_NAME"), os.Getenv("FORGE_OAUTH_CLIENT_URI")))
 	keychain.SetOAuthManager(s.oauthManager)
 	return s
 }

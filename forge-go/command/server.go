@@ -42,7 +42,6 @@ var (
 	serverTelemetrySQLiteBin  string
 	serverTelemetrySQLiteDB   string
 	serverTelemetrySQLitePort int
-	serverOAuthTokenStore     string
 )
 
 func init() {
@@ -75,7 +74,6 @@ func init() {
 	ServerCmd.Flags().StringVar(&serverTelemetrySQLiteBin, "otel-sqlite-binary", "", "Path to sqlite-otel binary for desktop_sqlite mode")
 	ServerCmd.Flags().StringVar(&serverTelemetrySQLiteDB, "otel-sqlite-db-path", "", "Path to sqlite-otel SQLite database file")
 	ServerCmd.Flags().IntVar(&serverTelemetrySQLitePort, "otel-sqlite-port", 4318, "Port for sqlite-otel OTLP/HTTP listener")
-	ServerCmd.Flags().StringVar(&serverOAuthTokenStore, "oauth-token-store", "", `OAuth token store backend: "memory" (default) or "keychain"`)
 
 	RootCmd.AddCommand(ServerCmd)
 }
@@ -125,7 +123,6 @@ var ServerCmd = &cobra.Command{
 			ClientDefaultTransport:  serverClientTransport,
 			ClientZMQBridgeMode:     serverClientZMQBridgeMode,
 			ClientAttachProcessTree: serverClientAttachTree,
-			OAuthTokenStore:         serverOAuthTokenStore,
 			StateStore:              serverStateStore,
 			TelemetryEnabled:        serverTelemetryEnabled,
 			TelemetryMode:           serverTelemetryMode,
