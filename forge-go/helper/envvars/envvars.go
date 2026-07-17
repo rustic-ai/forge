@@ -3,6 +3,7 @@ package envvars
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -148,6 +149,23 @@ func BuildAgentEnv(
 	return result, nil
 }
 
+func resolveSecretWithFallback(
+	ctx context.Context,
+	secretProvider secrets.SecretProvider,
+	orgID string,
+	key string,
+) (string, error) {
+	// secrets api stores secrets by orgID
+	secretKey := secrets.SecretStoreKey(orgID, key)
+	val, err := secretProvider.Resolve(ctx, secretKey)
+	if err != nil && errors.Is(err, secrets.ErrSecretNotFound) {
+		// Try key directly - secret is not managed using secrets api
+		val, err = secretProvider.Resolve(ctx, key)
+		return val, err
+	}
+	return val, err
+}
+
 func resolveSecrets(
 	ctx context.Context,
 	agentSpec *protocol.AgentSpec,
@@ -157,9 +175,9 @@ func resolveSecrets(
 	envMap map[string]string,
 ) error {
 	for _, key := range agentSpec.Resources.Secrets {
-		val, err := secretProvider.Resolve(ctx, key)
+		val, err := resolveSecretWithFallback(ctx, secretProvider, orgID, key)
 		if err != nil {
-			if err == secrets.ErrSecretNotFound {
+			if errors.Is(err, secrets.ErrSecretNotFound) {
 				continue
 			}
 			return fmt.Errorf("failed to resolve secret '%s' for agent '%s': %w", key, agentSpec.ID, err)
@@ -172,9 +190,9 @@ func resolveSecrets(
 	}
 
 	for _, s := range regEntry.Secrets {
-		val, err := secretProvider.Resolve(ctx, s.Key)
+		val, err := resolveSecretWithFallback(ctx, secretProvider, orgID, s.Key)
 		if err != nil {
-			if err == secrets.ErrSecretNotFound && (s.Optional == nil || *s.Optional) {
+			if errors.Is(err, secrets.ErrSecretNotFound) && (s.Optional == nil || *s.Optional) {
 				continue
 			}
 			return fmt.Errorf("failed to resolve secret '%s' for agent '%s': %w", s.Key, agentSpec.ID, err)
@@ -186,7 +204,7 @@ func resolveSecrets(
 		secretKey := oauth.StoreKey(orgID, o.Provider)
 		val, err := secretProvider.Resolve(ctx, secretKey)
 		if err != nil {
-			if err == secrets.ErrSecretNotFound && (o.Optional == nil || *o.Optional) {
+			if errors.Is(err, secrets.ErrSecretNotFound) && (o.Optional == nil || *o.Optional) {
 				continue
 			}
 			return fmt.Errorf("failed to resolve OAuth token for provider '%s', agent '%s': %w", o.Provider, agentSpec.ID, err)

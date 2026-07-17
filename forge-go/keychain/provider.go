@@ -1,12 +1,9 @@
 // Package keychain provides a secrets.SecretProvider backed by the OS keychain
 // (macOS Keychain, Windows Credential Manager, Linux Secret Service).
 //
-// Keys with the "oauth:orgID|providerID" format are handled specially:
-// if an OAuth manager is registered via SetOAuthManager, Resolve delegates
+// If an OAuth manager is registered via SetOAuthManager, Resolve delegates
 // to it (with automatic token refresh). Otherwise it reads the raw keychain
-// value and extracts the access_token field from the stored JSON.
-//
-// All other keys are returned as-is from the keychain.
+// value
 package keychain
 
 import (

@@ -19,6 +19,7 @@ import (
 	"github.com/rustic-ai/forge/forge-go/modelfit"
 	"github.com/rustic-ai/forge/forge-go/oauth"
 	"github.com/rustic-ai/forge/forge-go/protocol"
+	"github.com/rustic-ai/forge/forge-go/secrets"
 	"github.com/rustic-ai/forge/forge-go/supervisor"
 )
 
@@ -36,6 +37,7 @@ type Server struct {
 	modelFit         *modelFitService
 	oauthManager     *oauth.Manager
 	oauthRoutePrefix string
+	secretManager    *secrets.Manager
 	listenAddr       string
 	server           *http.Server
 }
@@ -58,18 +60,14 @@ func NewServer(db store.Store, statusStore supervisor.AgentStatusStore, controlP
 	return s
 }
 
-// WithOAuth initialises OAuth support. kind selects the token store backend
-// ("memory" or "keychain"); if empty, FORGE_OAUTH_TOKEN_STORE is consulted.
-func (s *Server) WithOAuth(kind string) *Server {
-	if kind == "" {
-		kind = os.Getenv("FORGE_OAUTH_TOKEN_STORE")
-	}
+// WithOAuth initialises OAuth support. Both store backends are selected from the
+// environment: FORGE_OAUTH_TOKEN_STORE for tokens and FORGE_OAUTH_CLIENT_STORE for
+// DCR client credentials, each "memory" (default) or "keychain".
+func (s *Server) WithOAuth() *Server {
+	kind := os.Getenv("FORGE_OAUTH_TOKEN_STORE")
 	cfg, err := oauth.LoadProvidersConfig(forgepath.OAuthProvidersConfigPath())
 	if err != nil {
 		fmt.Printf("WARN: failed to load OAuth providers config: %v\n", err)
-		return s
-	}
-	if len(cfg.Providers) == 0 {
 		return s
 	}
 	store, err := oauth.NewTokenStore(kind)
@@ -77,7 +75,17 @@ func (s *Server) WithOAuth(kind string) *Server {
 		fmt.Printf("WARN: %v; falling back to in-memory token store\n", err)
 		store, _ = oauth.NewTokenStore("memory")
 	}
-	s.oauthManager = oauth.NewManagerWithStore(cfg, store)
+	// Client credentials use their own backend (empty -> in-memory).
+	credStore, err := oauth.NewClientCredentialsStore(os.Getenv("FORGE_OAUTH_CLIENT_STORE"))
+	if err != nil {
+		fmt.Printf("WARN: %v; falling back to in-memory client credentials store\n", err)
+		credStore, _ = oauth.NewClientCredentialsStore("memory")
+	}
+	// FORGE_OAUTH_CLIENT_NAME / FORGE_OAUTH_CLIENT_URI override the client_name
+	// and client_uri registered with DCR providers; empty keeps the defaults
+	// (name "Forge", uri omitted).
+	s.oauthManager = oauth.NewManagerWithStores(cfg, store, credStore,
+		oauth.WithDynamicClient(os.Getenv("FORGE_OAUTH_CLIENT_NAME"), os.Getenv("FORGE_OAUTH_CLIENT_URI")))
 	keychain.SetOAuthManager(s.oauthManager)
 	return s
 }
@@ -85,6 +93,27 @@ func (s *Server) WithOAuth(kind string) *Server {
 // OAuthManager returns the oauth.Manager initialised by WithOAuth, or nil if OAuth is not configured.
 func (s *Server) OAuthManager() *oauth.Manager {
 	return s.oauthManager
+}
+
+// WithSecrets initialises org-scoped secret management. The store backend is
+// selected from FORGE_SECRET_STORE ("memory" (default) or "keychain"), mirroring
+// the OAuth token store. With the keychain backend, secrets are stored under
+// "secret:orgID|name" and resolve through the keychain SecretProvider directly —
+// no delegation is needed since the stored value is the secret itself.
+func (s *Server) WithSecrets() *Server {
+	store, err := secrets.NewSecretStore(os.Getenv("FORGE_SECRET_STORE"))
+	if err != nil {
+		fmt.Printf("WARN: %v; falling back to in-memory secret store\n", err)
+		store, _ = secrets.NewSecretStore("memory")
+	}
+	s.secretManager = secrets.NewManager(store)
+	return s
+}
+
+// SecretManager returns the secrets.Manager initialised by WithSecrets, or nil
+// if secret management is not configured.
+func (s *Server) SecretManager() *secrets.Manager {
+	return s.secretManager
 }
 
 func (s *Server) WithObservability(mode, sqliteDBPath string) *Server {
@@ -187,6 +216,9 @@ func (s *Server) buildRouter() *gin.Engine {
 		s.registerRusticUIRoutes(router, gemGen)
 		if s.oauthManager != nil {
 			s.registerOAuthRoutes(router, "/rustic")
+		}
+		if s.secretManager != nil {
+			s.registerSecretRoutes(router, "/rustic")
 		}
 		router.GET("/rustic/modelfit/local-models", wrapHTTP(s.handleListLocalModelFits()))
 		router.GET("/rustic/modelfit/capabilities", wrapHTTP(s.handleGetModelFitCapabilities()))

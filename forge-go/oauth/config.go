@@ -11,15 +11,49 @@ import (
 // ProviderConfig defines a named OAuth2 provider. Scopes and endpoint URLs are
 // set here; credentials are supplied per-request by the caller.
 type ProviderConfig struct {
-	DisplayName string   `yaml:"display_name"`
-	Description string   `yaml:"description"`
-	AuthURL     string   `yaml:"auth_url"`
-	TokenURL    string   `yaml:"token_url"`
-	Scopes      []string `yaml:"scopes"`
-	RedirectURL string   `yaml:"redirect_url"`
+	DisplayName string   `yaml:"display_name" json:"displayName,omitempty"`
+	Description string   `yaml:"description" json:"description,omitempty"`
+	AuthURL     string   `yaml:"auth_url" json:"authUrl,omitempty"`
+	TokenURL    string   `yaml:"token_url" json:"tokenUrl,omitempty"`
+	Scopes      []string `yaml:"scopes" json:"scopes,omitempty"`
+	RedirectURL string   `yaml:"redirect_url" json:"redirectUrl,omitempty"`
 	// UsePKCE controls whether PKCE (S256) is used. Defaults to true.
 	// Set to false for providers that do not support it.
-	UsePKCE *bool `yaml:"use_pkce"`
+	UsePKCE *bool `yaml:"use_pkce" json:"usePkce,omitempty"`
+
+	// ResourceURL is the OAuth2 protected-resource URL (e.g. an MCP server
+	// endpoint) used by the Dynamic Client Registration flow to discover the
+	// auth/token/registration endpoints (RFC 9728 + RFC 8414). It is only used
+	// when UseDCRP is set; traditional providers should configure AuthURL and
+	// TokenURL (or rely on the built-in endpoints) instead.
+	ResourceURL string `yaml:"resource_url" json:"resourceUrl,omitempty"`
+	// UseDCRP enables Dynamic Client Registration (RFC 7591): the endpoints are
+	// discovered from ResourceURL and the client_id/client_secret are registered
+	// with the provider on demand instead of being supplied by the caller.
+	// Requires ResourceURL. Defaults to false.
+	UseDCRP bool `yaml:"use_dcrp" json:"useDcrp,omitempty"`
+}
+
+// RequiresClientCredentials reports whether the caller must supply a client_id
+// and client_secret when starting an auth flow. Providers using Dynamic Client
+// Registration register their own credentials and require none.
+func (p ProviderConfig) RequiresClientCredentials() bool {
+	return !p.UseDCRP
+}
+
+// Validate reports configuration errors that would otherwise surface only when
+// an auth flow is started. resource_url and use_dcrp go together: DCR relies on
+// the endpoints advertised by the resource, and resource_url is meaningless
+// outside the DCR flow (it is not general endpoint discovery for traditional
+// providers).
+func (p ProviderConfig) Validate(id string) error {
+	if p.UseDCRP && p.ResourceURL == "" {
+		return fmt.Errorf("provider %q: use_dcrp requires resource_url", id)
+	}
+	if p.ResourceURL != "" && !p.UseDCRP {
+		return fmt.Errorf("provider %q: resource_url is only used with use_dcrp", id)
+	}
+	return nil
 }
 
 // pkce returns whether PKCE should be used for this provider (default: true).
@@ -64,6 +98,10 @@ func LoadProvidersConfig(path string) (*ProvidersConfig, error) {
 		p.AuthURL = interpolateEnv(p.AuthURL)
 		p.TokenURL = interpolateEnv(p.TokenURL)
 		p.RedirectURL = interpolateEnv(p.RedirectURL)
+		p.ResourceURL = interpolateEnv(p.ResourceURL)
+		if err := p.Validate(id); err != nil {
+			return nil, fmt.Errorf("parsing oauth providers config: %w", err)
+		}
 		interpolated[id] = p
 	}
 	cfg.Providers = interpolated

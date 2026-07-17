@@ -538,3 +538,50 @@ func TestBuildAgentEnv_SerializesAgentDependencyMap(t *testing.T) {
 		t.Errorf("unexpected filesystem properties in FORGE_AGENT_CONFIG_JSON: %v", props)
 	}
 }
+
+func TestBuildAgentEnv_RegistrySecret_WithOrgId(t *testing.T) {
+	ctx := context.Background()
+	orgID := "acme"
+
+	guildSpec := &protocol.GuildSpec{ID: "test/guild", Name: "Test"}
+	agentSpec := &protocol.AgentSpec{ID: "AgentSec", ClassName: "test.AgentSec"}
+
+	regEntry := &registry.AgentRegistryEntry{
+		Secrets: []protocol.SecretNeed{
+			protocol.NewSecretNeed("TEST_GLOBAL_KEY"),
+			protocol.NewSecretNeed("ORG_KEY"),
+			protocol.NewSecretNeed("USER_NAME"),
+		},
+	}
+
+	provider := &mockSecretProvider{
+		secrets: map[string]string{
+			"TEST_GLOBAL_KEY":                          "myGlobalKey",
+			"USER_NAME":                                "globalUserName",
+			secrets.SecretStoreKey(orgID, "ORG_KEY"):   "myOrgKey",
+			secrets.SecretStoreKey(orgID, "USER_NAME"): "orgUserName",
+		},
+	}
+
+	envSlice, err := BuildAgentEnv(ctx, guildSpec, agentSpec, regEntry, provider, orgID)
+	if err != nil {
+		t.Fatalf("BuildAgentEnv failed: %v", err)
+	}
+
+	envMap := make(map[string]string)
+	for _, e := range envSlice {
+		if parts := strings.SplitN(e, "=", 2); len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	if envMap["TEST_GLOBAL_KEY"] != "myGlobalKey" {
+		t.Errorf("expected TEST_GLOBAL_KEY=myGlobalKey, got %q", envMap["TEST_GLOBAL_KEY"])
+	}
+	if envMap["USER_NAME"] != "orgUserName" {
+		t.Errorf("expected USER_NAME=orgUserName, got %q", envMap["USER_NAME"])
+	}
+	if envMap["ORG_KEY"] != "myOrgKey" {
+		t.Errorf("expected ORG_KEY=myOrgKey, got %q", envMap["ORG_KEY"])
+	}
+}
