@@ -235,7 +235,7 @@ func (d *DockerSupervisor) Launch(ctx context.Context, guildID string, agentSpec
 		}
 		cmd = append(cmd, entry.Args...)
 	} else {
-		cmd = registry.ResolveCommand(entry)
+		cmd = registry.ResolveCommand(entry, agentSpec.ForgeExtraDeps)
 	}
 
 	if len(cmd) > 0 {
@@ -432,7 +432,7 @@ func (d *DockerSupervisor) relaunchContainer(ctx context.Context, guildID string
 		}
 		cmd = append(cmd, entry.Args...)
 	} else {
-		cmd = registry.ResolveCommand(entry)
+		cmd = registry.ResolveCommand(entry, agentSpec.ForgeExtraDeps)
 	}
 
 	if len(cmd) > 0 {

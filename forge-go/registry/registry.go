@@ -156,8 +156,13 @@ func (r *Registry) ValidateOAuth(oauthMgr *oauth.Manager) {
 	}
 }
 
-// ResolveCommand generates the OS exec slice strings required to launch the given agent entry
-func ResolveCommand(entry *AgentRegistryEntry) []string {
+// ResolveCommand generates the OS exec slice strings required to launch the given agent entry.
+//
+// extraDeps holds additional Python packages requested by the agent's spec
+// (AgentSpec.ForgeExtraDeps). They are installed only into this agent's uvx environment,
+// unlike the guild-wide FORGE_EXTRA_DEPS environment variable, and use the same value
+// format: each element may itself be a comma-separated list.
+func ResolveCommand(entry *AgentRegistryEntry, extraDeps []string) []string {
 	var cmd []string
 
 	switch entry.Runtime {
@@ -175,12 +180,11 @@ func ResolveCommand(entry *AgentRegistryEntry) []string {
 		for _, dep := range entry.WithDependencies {
 			cmd = append(cmd, "--with", dep)
 		}
-		if extraDeps := os.Getenv("FORGE_EXTRA_DEPS"); extraDeps != "" {
-			for _, dep := range strings.Split(extraDeps, ",") {
-				if dep = strings.TrimSpace(dep); dep != "" {
-					cmd = append(cmd, "--with", dep)
-				}
-			}
+		if envDeps := os.Getenv("FORGE_EXTRA_DEPS"); envDeps != "" {
+			cmd = appendWithDeps(cmd, envDeps)
+		}
+		for _, dep := range extraDeps {
+			cmd = appendWithDeps(cmd, dep)
 		}
 		if entry.Package != "" {
 			for _, pkg := range strings.Split(entry.Package, ",") {
@@ -208,6 +212,17 @@ func ResolveCommand(entry *AgentRegistryEntry) []string {
 		cmd = append(cmd, "python", "-m", "rustic_ai.forge.agent_runner")
 	}
 
+	return cmd
+}
+
+// appendWithDeps appends a `--with <dep>` pair for every non-empty, whitespace-trimmed
+// entry in a comma-separated dependency list.
+func appendWithDeps(cmd []string, deps string) []string {
+	for _, dep := range strings.Split(deps, ",") {
+		if dep = strings.TrimSpace(dep); dep != "" {
+			cmd = append(cmd, "--with", dep)
+		}
+	}
 	return cmd
 }
 

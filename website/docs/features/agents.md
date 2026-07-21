@@ -109,7 +109,7 @@ OnSpawn -> handleSpawn -> BuildAgentEnv -> supervisor.Launch (agent_runner via u
 ```
 
 1. **`OnSpawn`** — The control-plane's `ControlQueueListener.OnSpawn` (`agent/server.go`) receives the spawn request off `forge:control:requests`, idempotency-gates on `IsActivelyTracked`, enriches it with the guild's messaging config and full `guild_spec`, marks it `Accepted`, and acks the caller immediately. A background goroutine then calls `Scheduler.Schedule`, marks the placement `Dispatched`, and pushes the wrapped command onto `forge:control:node:<nodeID>`.
-2. **`handleSpawn`** — On the chosen worker, `ControlQueueHandler.handleSpawn` (`control/handler.go`) applies a cross-node idempotency gate against the `AgentStatusStore`, writes `state: "starting"` with a 120s TTL as a distributed ack, looks up the agent's class in the agent registry, resolves the guild spec and organization, and picks a per-org supervisor via a `SupervisorFactory`.
+2. **`handleSpawn`** — On the chosen worker, `ControlQueueHandler.handleSpawn` (`control/handler.go`) applies a cross-node idempotency gate against the `AgentStatusStore`, writes `state: "starting"` with a 120s TTL as a distributed ack, looks up the agent's class in the agent registry, resolves the guild spec and organization, and picks a per-org supervisor via a `SupervisorFactory`. It also restores the agent's `forge_extra_deps` from the stored guild spec, because that Forge-specific field does not survive the Python `GuildManagerAgent` that issued the spawn request (see [Per-agent Python packages](../reference/configuration/#per-agent-python-packages-forge_extra_deps)).
 3. **`BuildAgentEnv`** — The resolved `GuildSpec` and `AgentSpec` are serialized into environment variables (including `FORGE_GUILD_JSON`) so the Python process can self-configure without needing direct DB access.
 4. **`supervisor.Launch`** — The `ProcessSupervisor` execs the resolved command — for a `uvx`-runtime agent, this is `uvx --with <FORGE_PYTHON_PKG> ... python -m rustic_ai.forge.agent_runner`. On success it polls up to 5×100ms for a real PID and returns `SpawnResponse{NodeID, PID}`.
 
@@ -141,12 +141,15 @@ Each `AgentRegistryEntry` declares how to actually run that class:
       read_only: true
 ```
 
-`Lookup(className)` resolves an entry, and `ResolveCommand(entry)` builds the OS exec argv. For `uvx` this expands to something like:
+`Lookup(className)` resolves an entry, and `ResolveCommand(entry, extraDeps)` builds the OS exec argv. For `uvx` this expands to something like:
 
 ```bash
 uvx --with rustic-ai-agents-summarizer --with $FORGE_PYTHON_PKG \
   python -m rustic_ai.forge.agent_runner
 ```
+
+!!! note "Registry dependencies are class-wide; spec dependencies are per-agent"
+    `with_dependencies` belongs to the registry entry, so it applies to **every** agent of that class — it is the right place for what the class always needs. When a single agent needs a package because of something in *its* `properties` (a ReAct toolset, an LLM plugin), declare it on that agent's spec with `forge_extra_deps` instead, so its siblings don't pay for it. `ResolveCommand` emits `--with` for both, along with the guild-wide `FORGE_EXTRA_DEPS` env var.
 
 `uv.go` handles locating or bootstrapping the `uvx` binary itself: bundled next to the `forge` executable, then `PATH`, then `~/.forge/bin`, then `FORGE_UVX_PATH`, falling back to downloading `astral-sh/uv` if none is found.
 

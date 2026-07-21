@@ -91,6 +91,7 @@ type AgentModel struct {
 	ActOnlyWhenTagged      bool
 	DependencyMap          JSONB           `gorm:"type:jsonb"`
 	AdditionalDependencies JSONBStringList `gorm:"type:jsonb"`
+	ForgeExtraDeps         JSONBStringList `gorm:"type:jsonb"`
 	Predicates             JSONB           `gorm:"type:jsonb"`
 	Status                 AgentStatus     `gorm:"default:not_launched"`
 
@@ -106,6 +107,7 @@ func (a *AgentModel) normalizeDefaults() {
 	ensureJSONBStringList(&a.AdditionalTopics)
 	ensureJSONB(&a.DependencyMap)
 	ensureJSONBStringList(&a.AdditionalDependencies)
+	ensureJSONBStringList(&a.ForgeExtraDeps)
 	ensureJSONB(&a.Predicates)
 }
 

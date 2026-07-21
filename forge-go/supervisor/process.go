@@ -123,7 +123,7 @@ func (p *ProcessSupervisor) Launch(ctx context.Context, guildID string, agentSpe
 		return fmt.Errorf("failed to lookup agent class %s: %w", agentSpec.ClassName, err)
 	}
 
-	runtimeCmd := registry.ResolveCommand(entry)
+	runtimeCmd := registry.ResolveCommand(entry, agentSpec.ForgeExtraDeps)
 
 	if err := p.startProcess(ctx, guildID, agent, agentSpec, runtimeCmd, env); err != nil {
 		_ = p.emitProcessEvent(ctx, guildID, agent.ID, "agent.process.failed", infraevents.SeverityError, "agent process failed before startup completed", nil, map[string]any{

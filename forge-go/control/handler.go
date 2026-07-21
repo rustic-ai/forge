@@ -288,8 +288,23 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 		guildSpec = extractGuildSpec(req.AgentSpec.Properties)
 	}
 	if guildSpec == nil {
+		// Last-resort stub for guilds this node knows nothing about (no store row, no
+		// guild_spec in the spawn payload). It is serialized into FORGE_GUILD_JSON and
+		// validated by rustic-ai core, whose GuildSpec requires a non-empty name and
+		// description and a list-typed `agents` — so the stub must satisfy those or the
+		// agent process dies on a validation error before it runs.
+		name := req.GuildID
+		if name == "" {
+			name = "unknown-guild"
+		}
+		if len(name) > 64 {
+			name = name[:64]
+		}
 		guildSpec = &protocol.GuildSpec{
-			ID: req.GuildID,
+			ID:          req.GuildID,
+			Name:        name,
+			Description: "Guild " + name,
+			Agents:      []protocol.AgentSpec{},
 			Properties: map[string]interface{}{
 				"messaging": map[string]interface{}{
 					"backend_module": "rustic_ai.redis.messaging.backend",
@@ -297,6 +312,26 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 					"backend_config": map[string]interface{}{},
 				},
 			},
+		}
+	}
+	// Specs recovered from the payload can also carry a nil `agents`; Normalize turns it
+	// into an empty list (among other defaulting) so core validation accepts it.
+	guildSpec.Normalize()
+
+	// AgentSpec.ForgeExtraDeps is a Forge extension that rustic-ai core's AgentSpec does not
+	// model, so it is stripped when the Python guild manager re-serializes the spec to build
+	// this spawn request. The guild store is the authoritative copy; re-attach from there.
+	if len(req.AgentSpec.ForgeExtraDeps) == 0 {
+		for i := range guildSpec.Agents {
+			if guildSpec.Agents[i].ID != req.AgentSpec.ID {
+				continue
+			}
+			if deps := guildSpec.Agents[i].ForgeExtraDeps; len(deps) > 0 {
+				req.AgentSpec.ForgeExtraDeps = deps
+				slog.Debug("handleSpawn: restored forge_extra_deps from guild spec",
+					"agent_id", req.AgentSpec.ID, "guild", req.GuildID, "deps", deps)
+			}
+			break
 		}
 	}
 

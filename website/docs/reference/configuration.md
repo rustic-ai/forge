@@ -181,12 +181,47 @@ Full detail on the secret chain, OAuth PKCE flow, and keychain bridging is in [S
 | `FORGE_UV_CACHE_DIR` (+ `UV_CACHE_DIR`, `XDG_CACHE_HOME`, `XDG_DATA_HOME`) | — | Writable cache/data dirs for `uv`/`uvx` when spawning agent processes. |
 | `FORGE_UVX_PATH` | — | Override the `uvx` binary path. |
 | `FORGE_AGENT_REGISTRY` | — | Path to `forge-agent-registry.yaml`. |
-| `FORGE_EXTRA_DEPS` | — | Extra Python dependencies to install alongside an agent. |
+| `FORGE_EXTRA_DEPS` | — | Extra Python dependencies to install alongside **every** agent in the guild. For per-agent packages, prefer the `forge_extra_deps` field on an agent spec (see below). |
 | `FORGE_DATABASE_URL` | — | Deployment-time equivalent of `--db` for container/process managers. |
 | `FORGE_AGENT_TRANSPORT` | — | Default agent transport (`direct` \| `supervisor-zmq`), deployment-time equivalent of `--default-agent-transport`. |
 | `FORGE_INJECT_FS` / `FORGE_INJECT_NET` | — | Sandbox/supervisor injection toggles for filesystem/network access. |
 | `FORGE_E2E_ATELIER` | — | Set to `1` to gate the e2e ladder test suite. |
 | `FORGE_E2E_ENABLE_LIVE_LLM` | — | Set to `1` to enable live-LLM e2e tests. |
+
+### Per-agent Python packages: `forge_extra_deps`
+
+Agents that load plugins reference the plugin class by fully-qualified name inside
+`properties` — for example a ReAct toolset via `kind:
+rustic_ai.pandas_analyst.react_toolset.DataAnalystReActToolset`. Nothing in that class path
+tells the launcher which pip package provides it, so the package has to be declared.
+
+An agent spec can name its own requirements with `forge_extra_deps`:
+
+```json
+{
+  "id": "react_data_analyst",
+  "class_name": "rustic_ai.llm_agent.react.ReActAgent",
+  "forge_extra_deps": ["rusticai-pandas-analyst"]
+}
+```
+
+Each entry is appended to that agent's `uvx --with` set. Values use the same format as
+`FORGE_EXTRA_DEPS` — a package specifier, a local path, or a comma-separated list — but are
+installed **only into that agent's environment**, so a heavy dependency is not forced on
+every sibling agent in the guild. `FORGE_EXTRA_DEPS` remains available as the guild-wide
+escape hatch; the two combine.
+
+!!! note "A Forge extension, not part of the core agent DSL"
+    rustic-ai core's `AgentSpec` does not model `forge_extra_deps`. Core ignores unknown
+    spec keys rather than rejecting them, so Forge reads the value from the guild store
+    when handling a spawn request rather than from the spawn payload. Two consequences:
+
+    - Agents created at runtime by the guild manager — those never persisted in the guild
+      spec — cannot declare `forge_extra_deps` and fall back to `FORGE_EXTRA_DEPS`.
+    - The published OpenAPI schema (`/openapi.json`, `AgentSpec-Input`/`AgentSpec-Output`)
+      is generated from the core Python models, so it does not list `forge_extra_deps`.
+      The field is still accepted and persisted — the schema is descriptive, not
+      enforced — but generated clients will not expose it as a typed property.
 
 ## Agent-process environment variables
 

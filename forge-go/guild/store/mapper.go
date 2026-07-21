@@ -179,6 +179,7 @@ func FromAgentSpec(spec *protocol.AgentSpec, guildID string) *AgentModel {
 		ActOnlyWhenTagged:      false,
 		AdditionalTopics:       JSONBStringList(spec.AdditionalTopics),
 		AdditionalDependencies: JSONBStringList(spec.AdditionalDependencies),
+		ForgeExtraDeps:         JSONBStringList(spec.ForgeExtraDeps),
 		Status:                 AgentStatusPendingLaunch,
 	}
 	if spec.Properties != nil {
@@ -221,6 +222,7 @@ func ToAgentSpec(model *AgentModel) *protocol.AgentSpec {
 		ActOnlyWhenTagged:      &actOnlyWhenTagged,
 		AdditionalTopics:       []string(model.AdditionalTopics),
 		AdditionalDependencies: []string(model.AdditionalDependencies),
+		ForgeExtraDeps:         []string(model.ForgeExtraDeps),
 	}
 	if model.Properties != nil {
 		spec.Properties = map[string]interface{}(model.Properties)

@@ -133,3 +133,62 @@ func TestMapper_GuildSpec(t *testing.T) {
 		t.Errorf("Reconstructed agent properties deep equal failed")
 	}
 }
+
+// TestMapper_ForgeExtraDeps ensures the per-agent Forge package requirements survive the
+// store round-trip. This matters because the guild store is the authoritative copy: the
+// field is stripped when a spec passes through the Python guild manager, and
+// control.handleSpawn restores it from here.
+func TestMapper_ForgeExtraDeps(t *testing.T) {
+	t.Run("round-trips a populated value", func(t *testing.T) {
+		spec := &protocol.AgentSpec{
+			ID:             "analyst",
+			Name:           "Analyst",
+			Description:    "ReAct analyst with a pandas toolset",
+			ClassName:      "rustic_ai.llm_agent.react.ReActAgent",
+			ForgeExtraDeps: []string{"rusticai-pandas-analyst", "rusticai-litellm"},
+		}
+
+		got := store.ToAgentSpec(store.FromAgentSpec(spec, "guild-1"))
+		if !reflect.DeepEqual(got.ForgeExtraDeps, spec.ForgeExtraDeps) {
+			t.Errorf("ForgeExtraDeps = %v, want %v", got.ForgeExtraDeps, spec.ForgeExtraDeps)
+		}
+	})
+
+	t.Run("a spec without the field survives", func(t *testing.T) {
+		spec := &protocol.AgentSpec{
+			ID:          "plain",
+			Name:        "Plain",
+			Description: "No extra packages",
+			ClassName:   "rustic_ai.core.agents.testutils.echo_agent.EchoAgent",
+		}
+
+		got := store.ToAgentSpec(store.FromAgentSpec(spec, "guild-1"))
+		if len(got.ForgeExtraDeps) != 0 {
+			t.Errorf("expected no ForgeExtraDeps, got %v", got.ForgeExtraDeps)
+		}
+	})
+
+	t.Run("survives JSON encoding under its spec key", func(t *testing.T) {
+		raw := `{"id":"analyst","name":"Analyst","description":"d","class_name":"C",
+			"forge_extra_deps":["rusticai-pandas-analyst"]}`
+		var spec protocol.AgentSpec
+		if err := json.Unmarshal([]byte(raw), &spec); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !reflect.DeepEqual(spec.ForgeExtraDeps, []string{"rusticai-pandas-analyst"}) {
+			t.Fatalf("decoded ForgeExtraDeps = %v", spec.ForgeExtraDeps)
+		}
+
+		out, err := json.Marshal(&spec)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		var decoded map[string]interface{}
+		if err := json.Unmarshal(out, &decoded); err != nil {
+			t.Fatalf("re-unmarshal: %v", err)
+		}
+		if _, ok := decoded["forge_extra_deps"]; !ok {
+			t.Errorf("forge_extra_deps missing from encoded spec: %s", out)
+		}
+	})
+}

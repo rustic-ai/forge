@@ -679,8 +679,15 @@ type AgentSpec struct {
 	Predicates             map[string]RuntimePredicate `json:"predicates,omitempty"`
 	DependencyMap          map[string]DependencySpec   `json:"dependency_map,omitempty"`
 	AdditionalDependencies []string                    `json:"additional_dependencies,omitempty"`
-	Resources              ResourceSpec                `json:"resources,omitempty"`
-	QOS                    QOSSpec                     `json:"qos,omitempty"`
+	// ForgeExtraDeps lists extra Python packages to install into this agent's uvx
+	// environment (passed as `uvx --with <dep>`). It is the per-agent counterpart of the
+	// guild-wide FORGE_EXTRA_DEPS environment variable and uses the same value format.
+	// This is a Forge extension: rustic-ai core's AgentSpec ignores unknown keys, so the
+	// field is dropped when a spec round-trips through the Python guild manager. Forge
+	// re-attaches it from the guild store when handling a spawn request.
+	ForgeExtraDeps []string     `json:"forge_extra_deps,omitempty"`
+	Resources      ResourceSpec `json:"resources,omitempty"`
+	QOS            QOSSpec      `json:"qos,omitempty"`
 }
 
 func NewAgentSpec() AgentSpec {
@@ -693,6 +700,7 @@ func NewAgentSpec() AgentSpec {
 		Predicates:             map[string]RuntimePredicate{},
 		DependencyMap:          map[string]DependencySpec{},
 		AdditionalDependencies: []string{},
+		ForgeExtraDeps:         []string{},
 		Resources:              NewResourceSpec(),
 		QOS:                    NewQOSSpec(),
 	}
@@ -732,6 +740,9 @@ func (a *AgentSpec) Normalize() {
 	}
 	if a.AdditionalDependencies == nil {
 		a.AdditionalDependencies = []string{}
+	}
+	if a.ForgeExtraDeps == nil {
+		a.ForgeExtraDeps = []string{}
 	}
 	a.Resources.Normalize()
 	a.QOS.Normalize()

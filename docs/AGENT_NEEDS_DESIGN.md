@@ -112,6 +112,20 @@ Those needs belong to the selected dependency provider, not to the generic
 - OAuth requirements
 - user-facing capability prompts
 
+> **Amendment: `forge_extra_deps` is an intentional exception.**
+> `AgentSpec` has since gained `forge_extra_deps`, a list of Python packages installed
+> into that agent's `uvx` environment — which reads as setup metadata and so appears to
+> cut against this section. It does not, because the requirement is **per-instance, not
+> per-class**: which packages an agent needs depends on the plugin classes named in *its
+> own* `properties` (a ReAct toolset, an LLM plugin). Two agents of the same class can
+> need different packages, so a class-keyed catalog such as `AgentNeeds` structurally
+> cannot express it.
+>
+> The class-wide case is already covered by the agent registry's `with_dependencies`,
+> which is exactly the class-keyed catalog this document argues for. The dividing line to
+> preserve: class-wide requirements belong in a class-keyed catalog; requirements induced
+> by an individual spec's `properties` belong on that spec.
+
 ### 6.2 AgentNeeds
 
 Introduce a catalog object keyed by agent `class_name`.

@@ -358,6 +358,7 @@ func buildModels(spec *protocol.GuildSpec, orgID string) (*store.GuildModel, []s
 			AdditionalTopics:       store.JSONBStringList(aSpec.AdditionalTopics),
 			DependencyMap:          dependencySpecsToJSONB(aSpec.DependencyMap),
 			AdditionalDependencies: store.JSONBStringList(aSpec.AdditionalDependencies),
+			ForgeExtraDeps:         store.JSONBStringList(aSpec.ForgeExtraDeps),
 			Predicates:             runtimePredicatesToJSONB(aSpec.Predicates),
 			Status:                 store.AgentStatusPendingLaunch,
 		})

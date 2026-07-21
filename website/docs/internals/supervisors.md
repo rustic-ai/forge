@@ -53,9 +53,11 @@ The default kind is chosen at node startup via `--default-supervisor` (client) o
 4. **Guild spec + org resolution.** Resolve the guild spec and owning org from the enriched `SpawnRequest` (the server attaches guild messaging config and the full guild spec so DB-less workers can self-configure).
 5. **Env build.** Construct the process environment: messaging backend config, `FORGE_PYTHON_PKG`, dependency/network/filesystem directives, and any secrets the registry entry requires.
 6. **Supervisor selection.** Call `supervisorForOrganization(orgID)`, which lazily builds and caches the org's supervisor via the `SupervisorFactory`, yielding a `DispatchingSupervisor` over docker/bwrap/process.
-7. **`Launch`.** The handler calls `sup.Launch(ctx, guildID, agentSpec, reg, env)`. The supervisor itself calls `registry.ResolveCommand(entry)` internally to build the OS exec argv, then runs it.
+7. **`Launch`.** The handler calls `sup.Launch(ctx, guildID, agentSpec, reg, env)`. The supervisor itself calls `registry.ResolveCommand(entry, agentSpec.ForgeExtraDeps)` internally to build the OS exec argv, then runs it.
 
-For a `uvx`-runtime entry, `ResolveCommand` produces (with additional `--with` flags appended for `WithDependencies`, `FORGE_EXTRA_DEPS`, and any `package` field):
+Between steps 4 and 5 the handler also restores `AgentSpec.ForgeExtraDeps` from the guild spec it just loaded, when the incoming payload has none. `forge_extra_deps` is a Forge extension that rustic-ai core's `AgentSpec` does not model; core ignores unknown keys, so the field is dropped when the Python guild manager re-serializes a spec to build a spawn request. Since every agent but the guild manager is spawned that way, the store — not the payload — is the authoritative copy.
+
+For a `uvx`-runtime entry, `ResolveCommand` produces (with additional `--with` flags appended for `WithDependencies`, `FORGE_EXTRA_DEPS`, the spec's `forge_extra_deps`, and any `package` field):
 
 ```bash
 uvx --with "$FORGE_PYTHON_PKG" python -m rustic_ai.forge.agent_runner

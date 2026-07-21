@@ -6,7 +6,7 @@ Forge is a control plane and runtime for running guilds — persisted, multi-age
 
 **Guilds** are the unit of deployment. A guild is a named, persisted `protocol.GuildSpec` — agent specs, dependency map, routing rules, gateway config — authored in YAML/JSON or via the fluent `guild.NewGuildBuilder()` Go API, then bootstrapped through `guild.Bootstrap` into `GuildModel`/`AgentModel` rows and a spawn request for the system `GuildManagerAgent`. The persisted spec, not the one you submitted, is canonical: every downstream spawn re-hydrates it via `store.ToGuildSpec`.
 
-**Agents** are the individual processes inside a guild, declared as `protocol.AgentSpec` (class name, resources, dependencies, topics, predicates). They're what the scheduler places and the supervisor runs — a Python class launched through the `forge-python` execution bridge, typically via `uvx` and `rustic_ai.forge.agent_runner`.
+**Agents** are the individual processes inside a guild, declared as `protocol.AgentSpec` (class name, resources, dependencies, Python packages, topics, predicates). They're what the scheduler places and the supervisor runs — a Python class launched through the `forge-python` execution bridge, typically via `uvx` and `rustic_ai.forge.agent_runner`.
 
 **Scheduling and placement** is best-fit (actually most-free) resource matching: the `Scheduler` reads each agent's `ResourceSpec` (CPUs, GPUs, memory), filters healthy nodes from the `NodeRegistry`, and picks the node with the highest `remMem + remCPUs*1024` score. Placement state lives in the in-memory `PlacementMap`, walking agents through `accepted → dispatched → acknowledged → running`.
 

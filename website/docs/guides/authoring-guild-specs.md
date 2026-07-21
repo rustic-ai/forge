@@ -32,8 +32,35 @@ Each agent is an `AgentSpec` (`protocol/spec.go:670`). The only required field i
 
 - `listen_to_default_topic` defaults to `true`
 - `act_only_when_tagged` defaults to `false`
-- `additional_topics`, `predicates`, `dependency_map`, `additional_dependencies` are all optional
+- `additional_topics`, `predicates`, `dependency_map`, `additional_dependencies`, `forge_extra_deps` are all optional
 - `resources` (`num_cpus`, `num_gpus`, `custom_resources`) defaults to zero-valued, but must never go negative
+
+### Declaring an agent's Python packages
+
+An agent's `class_name` tells Forge which package to install for the agent *itself*. It says nothing about classes referenced from `properties`. Plugin-style agents — a ReAct agent with a toolset, an LLM agent with a custom plugin — name those by fully-qualified path:
+
+```yaml
+agents:
+  - name: Data Analyst
+    description: analyses CSVs with a pandas toolset
+    class_name: rustic_ai.llm_agent.react.react_agent.ReActAgent
+    properties:
+      toolset:
+        kind: rustic_ai.pandas_analyst.react_toolset.DataAnalystReActToolset
+    forge_extra_deps:
+      - rusticai-pandas-analyst
+```
+
+Nothing in that `kind:` path tells the launcher which pip package provides it, so **you have to declare it**. Without `forge_extra_deps` the agent starts, fails to import the toolset, and is restarted by the supervisor in a loop.
+
+Each entry is appended to that agent's `uvx --with` set, and only that agent's — a heavy dependency is not forced on its siblings. Entries may be package specifiers, local paths, or comma-separated lists.
+
+!!! warning "Three similar-looking fields, three different jobs"
+    - `forge_extra_deps` — **Python packages** to install into this agent's environment.
+    - `dependency_map` / `additional_dependencies` — framework-injected **dependency resolvers** (filesystem, LLM, memory). These do not install anything.
+    - `FORGE_EXTRA_DEPS` — the same idea as `forge_extra_deps` but an environment variable applied **guild-wide**, to every agent.
+
+    Full details in [Per-agent Python packages](../reference/configuration/#per-agent-python-packages-forge_extra_deps).
 
 !!! note "The persisted spec is canonical"
     Whatever you submit to `POST /api/guilds` gets normalized and persisted as `GuildModel`/`AgentModel` rows. Every later spawn — including relaunches — reconstructs the spec from the store via `store.ToGuildSpec`, not from your original YAML. Write specs so they're correct standing alone; don't rely on external state that only existed at submission time.
@@ -163,6 +190,18 @@ A guild's `dependency_map` holds named `DependencySpec` entries (`ClassName`, `P
 3. **Conf path** `agent-dependencies.yaml` (resolved via `forgepath.DependencyConfigPath`, default `conf/agent-dependencies.yaml`)
 
 The merge only *adds* keys that are missing at a higher layer — it never overwrites a key your spec already defined. Both `GuildBuilder.BuildSpec()` and `guild.Bootstrap` perform this merge (forge-home first, then conf), so a dependency you declare in the spec is always safe from being clobbered by environment-wide defaults.
+
+!!! danger "A half-declared dependency is worse than none"
+    The merge is **key-level, not property-level**. Declaring a key with empty `properties` still counts as declaring it, so the defaults are skipped and nothing fills the gap:
+
+    ```yaml
+    dependency_map:
+      llm:
+        class_name: rustic_ai.litellm.agent_ext.llm.LiteLLMResolver
+        properties: {}          # blocks the default `model`; does NOT inherit it
+    ```
+
+    This fails at agent startup with `LiteLLMResolver.__init__() missing 1 required positional argument: 'model'`, not at validation time. Either omit the key entirely to take the configured default, or specify it fully. The same applies on the Python side (`GuildHelper.get_guild_dependency_map`), so the behaviour is identical however the guild is launched.
 
 ### Pointing filesystem dependencies at file/S3/GCS roots
 

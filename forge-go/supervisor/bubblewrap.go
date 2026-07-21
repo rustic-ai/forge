@@ -103,7 +103,7 @@ func (p *BubblewrapSupervisor) Launch(ctx context.Context, guildID string, agent
 		return fmt.Errorf("failed to lookup agent class %s: %w", agentSpec.ClassName, err)
 	}
 
-	runtimeCmd := registry.ResolveCommand(entry)
+	runtimeCmd := registry.ResolveCommand(entry, agentSpec.ForgeExtraDeps)
 	if len(runtimeCmd) == 0 {
 		return fmt.Errorf("runtimeCmd is empty")
 	}

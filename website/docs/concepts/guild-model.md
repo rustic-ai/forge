@@ -16,12 +16,12 @@ Everything starts as a `protocol.GuildSpec` (`protocol/spec.go:816`) — the thi
 | `Routes` | A `RoutingSlip`. |
 | `Gateway` | Optional `GatewayConfig`. |
 
-An `AgentSpec` (`protocol/spec.go:670`) carries `ID`, `Name`, `Description`, a required `ClassName` (Python dotted path), `AdditionalTopics`, `Properties`, `ListenToDefaultTopic` (default `true`), `ActOnlyWhenTagged` (default `false`), `Predicates`, `DependencyMap`, `AdditionalDependencies`, `Resources` (`NumCPUs`/`NumGPUs`/`CustomResources`), and `QOS`.
+An `AgentSpec` (`protocol/spec.go:670`) carries `ID`, `Name`, `Description`, a required `ClassName` (Python dotted path), `AdditionalTopics`, `Properties`, `ListenToDefaultTopic` (default `true`), `ActOnlyWhenTagged` (default `false`), `Predicates`, `DependencyMap`, `AdditionalDependencies`, `ForgeExtraDeps` (Python packages for that agent's `uvx` environment — see [Per-agent Python packages](../reference/configuration/#per-agent-python-packages-forge_extra_deps)), `Resources` (`NumCPUs`/`NumGPUs`/`CustomResources`), and `QOS`.
 
 `guild.Bootstrap` persists this spec as two GORM-backed tables (`guild/store/models.go`):
 
 - **`GuildModel`** (table `guilds`) — `ID`, `Name`, `Description`, `ExecutionEngine`, `BackendModule`, `BackendClass`, `BackendConfig`, `OrganizationID`, `DependencyMap`, `Status`, `Routes`, `Agents`.
-- **`AgentModel`** (table `agents`) — `ID`, `GuildID`, `Name`, `ClassName`, `Properties`, `AdditionalTopics`, `ListenToDefaultTopic`, `ActOnlyWhenTagged`, `DependencyMap`, `AdditionalDependencies`, `Predicates`, `Status`.
+- **`AgentModel`** (table `agents`) — `ID`, `GuildID`, `Name`, `ClassName`, `Properties`, `AdditionalTopics`, `ListenToDefaultTopic`, `ActOnlyWhenTagged`, `DependencyMap`, `AdditionalDependencies`, `ForgeExtraDeps`, `Predicates`, `Status`.
 
 Routes live in their own `guild_routes` table, and relaunch bookkeeping lives in `guilds_relaunch`.
 
@@ -33,6 +33,11 @@ Forge never re-uses the spec that was submitted over HTTP. `guild/store/mapper.g
 - `ToGuildSpec(model) *protocol.GuildSpec` — rebuilds a full spec from a `GuildModel`, reconstructing `Properties.execution_engine` and `Properties.messaging` from the stored columns.
 
 Every downstream spawn re-hydrates the spec by calling `store.ToGuildSpec(GetGuild(id))` — never by holding onto the spec that arrived in the original request. That means **the persisted spec, not the submitted one, is canonical**. Any normalization (dependency merges, filesystem-root rewriting, ID assignment, state-manager-config derivation) must happen *before* `CreateGuildWithAgents` in `Bootstrap`, because after that point the store row is the only thing anyone reads from again.
+
+!!! warning "The invariant is load-bearing for `forge_extra_deps`"
+    `forge_extra_deps` is a Forge extension that rustic-ai core's `AgentSpec` does not model. Core ignores unknown keys rather than rejecting them, so the field is **silently dropped** when a spec round-trips through the Python `GuildManagerAgent` — which is how every agent except the manager is spawned. `handleSpawn` therefore restores it from the stored guild spec rather than trusting the spawn payload, and it works only because the store is canonical.
+
+    A corollary for maintainers: `Bootstrap` builds `AgentModel` values inline in `buildModels`, *not* through `store.FromAgentSpec`. A new `AgentSpec` field must be wired into **both** places or it will be lost before any agent is spawned.
 
 This is why `FILE_API_GUILD_SPEC_FLOW.md` names `guild/bootstrap.go`'s `Bootstrap` as the single canonical write hook for spec normalization, with `api/manager.go`'s `HandleManagerEnsureGuild` as a secondary writer only on the guild-missing branch of the manager round-trip.
 

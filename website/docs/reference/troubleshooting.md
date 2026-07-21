@@ -105,6 +105,36 @@ See [Scheduler & Reconciler](../concepts/placement-reconciliation/) for the full
 
     If 6379 is already in use by another Redis, pass `--embedded-redis-addr` to bind elsewhere, or point `--redis` at the existing instance instead of using the embedded default.
 
+## One agent crash-loops with ModuleNotFoundError while the rest of the guild runs
+
+**Symptom:** A single agent restarts repeatedly. Its logs show `ModuleNotFoundError: No module named '<some.plugin.module>'`, or `A class referenced by the properties of '<AgentClass>' is not importable in this environment`. Other agents in the guild are healthy.
+
+**Root cause:** The agent's `properties` reference a plugin class by fully-qualified path — a ReAct toolset, an LLM plugin — and nothing in that path tells the launcher which pip package provides it. The agent's own package installs fine; the plugin's does not, because nobody asked for it.
+
+**Fix:** Declare the package on that agent's spec:
+
+```json
+{
+  "class_name": "rustic_ai.llm_agent.react.react_agent.ReActAgent",
+  "properties": { "toolset": { "kind": "rustic_ai.pandas_analyst.react_toolset.DataAnalystReActToolset" } },
+  "forge_extra_deps": ["rusticai-pandas-analyst"]
+}
+```
+
+Verify it took effect by checking the spawned argv — the package should appear as a `--with` flag for that agent and no other:
+
+```bash
+ps -eo args | grep agent_runner
+```
+
+If it is missing there, confirm the value actually persisted; the guild store is authoritative, and the field is read from there rather than from the spawn payload:
+
+```bash
+sqlite3 <db> "select id, forge_extra_deps from agents;"
+```
+
+A guild-wide alternative is the `FORGE_EXTRA_DEPS` environment variable, but it installs the package into *every* agent's environment. See [Per-agent Python packages](configuration/#per-agent-python-packages-forge_extra_deps).
+
 ## Telemetry: /rustic/observe returns 501, external_otlp needs an endpoint
 
 **Symptom 1:** `GET /rustic/observe/guilds/:guild_id/messages/:msg_id/spans` returns `501 Not Implemented`.

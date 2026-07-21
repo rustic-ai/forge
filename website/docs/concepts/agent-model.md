@@ -19,6 +19,7 @@ type AgentSpec struct {
     Predicates             []Predicate
     DependencyMap          map[string]DependencySpec
     AdditionalDependencies []string
+    ForgeExtraDeps         []string // Python packages for this agent's uvx env
     Resources              ResourceSpec // NumCPUs, NumGPUs, CustomResources
     QOS                    QOSSpec
 }
@@ -29,7 +30,8 @@ type AgentSpec struct {
 - **`ClassName`** is a Python dotted path (e.g. `rustic_ai.agents.EchoAgent`) — it is required and is what the agent registry looks up at launch time.
 - **`ListenToDefaultTopic` defaults to `true`.** Most agents want to hear the guild's default topic without any explicit subscription. The `GuildManagerAgent` is the notable exception — it flips this to `false` because it only cares about its own system topics.
 - **`ActOnlyWhenTagged` defaults to `false`.** When `true`, the agent only reacts to messages that explicitly tag it, rather than everything on its subscribed topics.
-- **`DependencyMap` / `AdditionalDependencies`** let an individual agent override or extend the guild-level dependency resolvers (see [Dependency Injection](../features/agents/)).
+- **`DependencyMap` / `AdditionalDependencies`** let an individual agent override or extend the guild-level dependency resolvers (see [Dependency Injection](../features/agents/)). These are framework-injected *resolvers*, not Python packages — do not reach for them to install a library.
+- **`ForgeExtraDeps`** (`forge_extra_deps` in JSON) names Python packages to install into **this agent's** `uvx` environment, for agents whose `Properties` reference plugin classes their base package does not pull in. It is a Forge extension rather than part of the rustic-ai core agent DSL; see [Per-agent Python packages](../reference/configuration/#per-agent-python-packages-forge_extra_deps).
 - **`Resources`** (`NumCPUs`, `NumGPUs`, `CustomResources["memory"]`) is what the [scheduler](placement-reconciliation/) reads to place the agent on a node with sufficient capacity.
 
 Agents are authored either directly in YAML/JSON under a `GuildSpec`, or via the fluent `guild.NewAgentBuilder()` in Go, which validates name, description, `class_name`, and resource values before producing the spec. See [Guild Model](guild-model/) for the full authoring pipeline.
@@ -142,11 +144,13 @@ Each `AgentRegistryEntry` is keyed on `ClassName` and declares:
 - **`Network`** — an egress allowlist for the process.
 - **`Filesystem`** — bind mounts the process needs access to.
 
-`Lookup(className)` resolves an entry, and `ResolveCommand(entry)` turns it into the actual OS exec argv. For `uvx` entries this looks like:
+`Lookup(className)` resolves an entry, and `ResolveCommand(entry, extraDeps)` turns it into the actual OS exec argv. For `uvx` entries this looks like:
 
 ```bash
 uvx --with <FORGE_PYTHON_PKG> ... python -m rustic_ai.forge.agent_runner
 ```
+
+A `--with` flag is emitted for each of, in order: the registry entry's `WithDependencies`, the guild-wide `FORGE_EXTRA_DEPS` environment variable, the spec's own `ForgeExtraDeps`, and the entry's `Package`. The distinction between the first and third matters when authoring: `WithDependencies` is **class-wide** — every agent of that class gets it — whereas `ForgeExtraDeps` is **per-agent**, so one agent's heavy plugin dependency is not forced on its siblings.
 
 The `uvx` binary itself is resolved through a fallback chain: bundled next to the `forge` binary, then `PATH`, then `~/.forge/bin`, then `FORGE_UVX_PATH`, and if none of those exist it is downloaded from `astral-sh/uv`.
 

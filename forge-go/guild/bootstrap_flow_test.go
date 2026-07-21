@@ -464,3 +464,75 @@ func TestBootstrap_Flow_PersistsResolvedS3FilesystemPathBase(t *testing.T) {
 		t.Fatalf("expected spawned agent path_base %q, got %q", "s3://forge-bucket/root/private", got)
 	}
 }
+
+// TestBootstrap_Flow_PersistsForgeExtraDeps covers the launch path an actual guild takes:
+// Bootstrap builds store.AgentModel values inline in buildModels rather than going through
+// store.FromAgentSpec, so a new AgentSpec field has to be wired in both places. The guild
+// store is the authoritative copy of forge_extra_deps (rustic-ai core drops the key when
+// a spec round-trips through the Python guild manager), so if Bootstrap fails to persist
+// it the field is gone before any agent is ever spawned.
+func TestBootstrap_Flow_PersistsForgeExtraDeps(t *testing.T) {
+	ctx := context.Background()
+
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("start miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer func() { _ = rdb.Close() }()
+
+	db, err := store.NewGormStore(store.DriverSQLite, filepath.Join(t.TempDir(), "extra-deps.db"))
+	if err != nil {
+		t.Fatalf("create sqlite store: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	spec := &protocol.GuildSpec{
+		ID:          "extra-deps-guild",
+		Name:        "Extra Deps",
+		Description: "Verifies forge_extra_deps persistence",
+		Agents: []protocol.AgentSpec{
+			{
+				ID:             "extra-deps-guild#analyst",
+				Name:           "Analyst",
+				Description:    "Owns a plugin package",
+				ClassName:      "rustic_ai.llm_agent.react.react_agent.ReActAgent",
+				ForgeExtraDeps: []string{"rusticai-pandas-analyst"},
+			},
+			{
+				ID:          "extra-deps-guild#plain",
+				Name:        "Plain",
+				Description: "Needs no extra packages",
+				ClassName:   "rustic_ai.core.agents.testutils.echo_agent.EchoAgent",
+			},
+		},
+	}
+
+	if _, err := Bootstrap(ctx, db, control.NewRedisControlTransport(rdb), nil, spec, "org-extra-deps",
+		filepath.Join(t.TempDir(), "missing-agent-deps.yaml")); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	guildModel, err := db.GetGuild("extra-deps-guild")
+	if err != nil {
+		t.Fatalf("get guild: %v", err)
+	}
+
+	found := map[string][]string{}
+	for _, a := range guildModel.Agents {
+		found[a.ID] = []string(a.ForgeExtraDeps)
+	}
+
+	analyst, ok := found["extra-deps-guild#analyst"]
+	if !ok {
+		t.Fatalf("analyst agent was not persisted; got %v", found)
+	}
+	if len(analyst) != 1 || analyst[0] != "rusticai-pandas-analyst" {
+		t.Errorf("analyst ForgeExtraDeps = %v, want [rusticai-pandas-analyst]", analyst)
+	}
+	if plain := found["extra-deps-guild#plain"]; len(plain) != 0 {
+		t.Errorf("sibling agent should have no ForgeExtraDeps, got %v", plain)
+	}
+}
