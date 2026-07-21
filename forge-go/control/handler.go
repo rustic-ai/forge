@@ -288,8 +288,23 @@ func (h *ControlQueueHandler) handleSpawn(ctx context.Context, req *protocol.Spa
 		guildSpec = extractGuildSpec(req.AgentSpec.Properties)
 	}
 	if guildSpec == nil {
+		// Last-resort stub for guilds this node knows nothing about (no store row, no
+		// guild_spec in the spawn payload). It is serialized into FORGE_GUILD_JSON and
+		// validated by rustic-ai core, whose GuildSpec requires a non-empty name and
+		// description and a list-typed `agents` — so the stub must satisfy those or the
+		// agent process dies on a validation error before it runs.
+		name := req.GuildID
+		if name == "" {
+			name = "unknown-guild"
+		}
+		if len(name) > 64 {
+			name = name[:64]
+		}
 		guildSpec = &protocol.GuildSpec{
-			ID: req.GuildID,
+			ID:          req.GuildID,
+			Name:        name,
+			Description: "Guild " + name,
+			Agents:      []protocol.AgentSpec{},
 			Properties: map[string]interface{}{
 				"messaging": map[string]interface{}{
 					"backend_module": "rustic_ai.redis.messaging.backend",
