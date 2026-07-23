@@ -1,0 +1,12 @@
+# OpenAPI Generator Ignore
+# Files listed here are NOT written by `openapi-generator-cli generate`.
+# The package's own tooling (package.json, tsconfig.json, README) lives in the
+# package root and must never be produced inside src/.
+
+git_push.sh
+.npmignore
+.gitignore
+docs/
+README.md
+package.json
+tsconfig.json

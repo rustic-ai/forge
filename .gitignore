@@ -94,6 +94,9 @@ cover/
 **/.tools/
 **/.bin/
 
+clients/typescript/dist
+clients/typescript/node_modules
+
 .claude/
 CLAUDE.md
 AGENTS.md

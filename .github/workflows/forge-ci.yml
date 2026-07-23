@@ -5,11 +5,13 @@ on:
     paths:
       - "forge-go/**"
       - "forge-python/**"
+      - "clients/**"
       - ".github/workflows/**"
   pull_request:
     paths:
       - "forge-go/**"
       - "forge-python/**"
+      - "clients/**"
       - ".github/workflows/**"
 
 permissions:
@@ -42,6 +44,16 @@ jobs:
           install-mode: goinstall
           working-directory: forge-go
           args: --timeout=5m
+
+      - name: Verify generated contract matches the OpenAPI spec
+        run: |
+          go generate ./api/contract/...
+          if [ -n "$(git status --porcelain -- api/contract/gen.go)" ]; then
+            echo "::error::forge-go/api/contract/gen.go is out of date with openapi.json." >&2
+            echo "Run 'go generate ./api/contract/...' in forge-go and commit the result." >&2
+            git --no-pager diff -- api/contract/gen.go >&2
+            exit 1
+          fi
 
       - name: Run test suite
         run: go test -v ./...
