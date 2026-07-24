@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/rustic-ai/forge/forge-go/secrets"
 )
 
@@ -71,15 +70,10 @@ func decodeSecretValue(encoded string) (string, error) {
 	return string(decoded), nil
 }
 
-// registerSecretRoutes wires the org-scoped secret CRUD endpoints. There is
-// deliberately no endpoint that returns a secret value; values are only ever
-// read internally through the SecretProvider chain.
-func (s *Server) registerSecretRoutes(router *gin.Engine, prefix string) {
-	router.GET(prefix+"/organizations/:org_id/secrets", wrapHTTPWithPathValues(s.handleListSecrets(), "org_id"))
-	router.POST(prefix+"/organizations/:org_id/secrets", wrapHTTPWithPathValues(s.handleCreateSecret(), "org_id"))
-	router.PUT(prefix+"/organizations/:org_id/secrets/:name", wrapHTTPWithPathValues(s.handleUpdateSecret(), "org_id", "name"))
-	router.DELETE(prefix+"/organizations/:org_id/secrets/:name", wrapHTTPWithPathValues(s.handleDeleteSecret(), "org_id", "name"))
-}
+// The org-scoped secret CRUD endpoints are part of the generated contract
+// (see api/contract_server.go). There is deliberately no endpoint that returns
+// a secret value; values are only ever read internally through the
+// SecretProvider chain.
 
 func (s *Server) handleListSecrets() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

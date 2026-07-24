@@ -24,22 +24,19 @@ import (
 )
 
 type Server struct {
-	contract.UnimplementedServer
-
-	store            store.Store
-	statusStore      supervisor.AgentStatusStore
-	controlPusher    protocol.ControlPusher
-	msgClient        messaging.Backend
-	infraPublisher   *infraevents.Publisher
-	fileStore        *filesystem.LocalFileStore
-	localUI          *localUIState
-	observeService   *observeService
-	modelFit         *modelFitService
-	oauthManager     *oauth.Manager
-	oauthRoutePrefix string
-	secretManager    *secrets.Manager
-	listenAddr       string
-	server           *http.Server
+	store          store.Store
+	statusStore    supervisor.AgentStatusStore
+	controlPusher  protocol.ControlPusher
+	msgClient      messaging.Backend
+	infraPublisher *infraevents.Publisher
+	fileStore      *filesystem.LocalFileStore
+	localUI        *localUIState
+	observeService *observeService
+	modelFit       *modelFitService
+	oauthManager   *oauth.Manager
+	secretManager  *secrets.Manager
+	listenAddr     string
+	server         *http.Server
 }
 
 func NewServer(db store.Store, statusStore supervisor.AgentStatusStore, controlPusher protocol.ControlPusher, mc messaging.Backend, fs *filesystem.LocalFileStore, listenAddr string) *Server {
@@ -198,7 +195,9 @@ func (s *Server) buildRouter() *gin.Engine {
 		router.GET("/ws/guilds/:id/usercomms/:user_id/:user_name", wrapHTTPWithPathValues(gateway.UserCommsHandler(s.msgClient, s.store, gemGen), "id", "user_id", "user_name"))
 		router.GET("/ws/guilds/:id/syscomms/:user_id", wrapHTTPWithPathValues(gateway.SysCommsHandler(s.msgClient, s.store, gemGen), "id", "user_id"))
 
-		// Contract-first REST surface.
+		// Contract-first REST surface. Secrets and OAuth are part of this
+		// generated surface too; their handlers guard on the relevant manager
+		// being configured and return 404 when it is not.
 		contract.RegisterHandlersWithOptions(router, s, contract.GinServerOptions{
 			ErrorHandler: func(c *gin.Context, err error, statusCode int) {
 				ReplyError(c.Writer, statusCode, err.Error())
@@ -214,12 +213,6 @@ func (s *Server) buildRouter() *gin.Engine {
 	}
 	if enableUI {
 		s.registerRusticUIRoutes(router, gemGen)
-		if s.oauthManager != nil {
-			s.registerOAuthRoutes(router, "/rustic")
-		}
-		if s.secretManager != nil {
-			s.registerSecretRoutes(router, "/rustic")
-		}
 		router.GET("/rustic/modelfit/local-models", wrapHTTP(s.handleListLocalModelFits()))
 		router.GET("/rustic/modelfit/capabilities", wrapHTTP(s.handleGetModelFitCapabilities()))
 		router.GET("/rustic/observe/guilds/:guild_id/messages/:msg_id/spans", wrapHTTPWithPathValues(s.handleObserveMessageSpans(), "guild_id", "msg_id"))

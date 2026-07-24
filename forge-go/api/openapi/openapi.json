@@ -446,6 +446,38 @@
         "title": "AgentTag",
         "type": "object"
       },
+      "AuthorizeRequest": {
+        "type": "object",
+        "title": "AuthorizeRequest",
+        "description": "OAuth authorize request. clientId/clientSecret are required for providers that use static credentials and must be omitted for providers using dynamic client registration.",
+        "properties": {
+          "clientId": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "clientSecret": {
+            "title": "Client Secret",
+            "type": "string"
+          },
+          "redirectUrl": {
+            "title": "Redirect Url",
+            "type": "string"
+          }
+        }
+      },
+      "AuthorizeResponse": {
+        "type": "object",
+        "title": "AuthorizeResponse",
+        "required": [
+          "authUrl"
+        ],
+        "properties": {
+          "authUrl": {
+            "title": "Auth Url",
+            "type": "string"
+          }
+        }
+      },
       "BaseAgentProps": {
         "description": "Empty class for Agent properties.",
         "properties": {},
@@ -1329,6 +1361,25 @@
         "title": "CreateBoardRequest",
         "type": "object"
       },
+      "CreateSecretRequest": {
+        "type": "object",
+        "title": "CreateSecretRequest",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string",
+            "description": "The secret value, base64-encoded (standard encoding)."
+          }
+        }
+      },
       "DependencySpec": {
         "properties": {
           "class_name": {
@@ -1881,7 +1932,8 @@
           "conversation_id": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "format": "int64"
               },
               {
                 "type": "null"
@@ -1893,7 +1945,8 @@
             "description": "Read-only property to get the current thread ID of the message.\n\nReturns:\n    int: The current thread ID of the message.",
             "readOnly": true,
             "title": "Current Thread Id",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           },
           "enrich_with_history": {
             "anyOf": [
@@ -1927,12 +1980,14 @@
             "description": "Read-only property to get the ID of the message.\n\nReturns:\n    int: The ID of the message.",
             "readOnly": true,
             "title": "Id",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           },
           "in_response_to": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "format": "int64"
               },
               {
                 "type": "null"
@@ -1994,7 +2049,8 @@
             "description": "Read-only property to get the root thread ID of the message.\n\nReturns:\n    int: The root thread ID of the message.",
             "readOnly": true,
             "title": "Root Thread Id",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           },
           "routing_slip": {
             "anyOf": [
@@ -2025,7 +2081,8 @@
           },
           "thread": {
             "items": {
-              "type": "integer"
+              "type": "integer",
+              "format": "int64"
             },
             "title": "Thread",
             "type": "array"
@@ -2097,6 +2154,94 @@
         ],
         "title": "Message",
         "type": "object"
+      },
+      "OAuthDisconnectResponse": {
+        "type": "object",
+        "title": "OAuthDisconnectResponse",
+        "required": [
+          "providerId",
+          "disconnected"
+        ],
+        "properties": {
+          "providerId": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "disconnected": {
+            "title": "Disconnected",
+            "type": "boolean"
+          }
+        }
+      },
+      "OAuthProviderStatus": {
+        "type": "object",
+        "title": "OAuthProviderStatus",
+        "required": [
+          "id",
+          "displayName",
+          "isConnected",
+          "scopes",
+          "callbackUrl",
+          "requiresClientCredentials"
+        ],
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "displayName": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "isConnected": {
+            "title": "Is Connected",
+            "type": "boolean"
+          },
+          "scopes": {
+            "title": "Scopes",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "callbackUrl": {
+            "title": "Callback Url",
+            "type": "string"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "requiresClientCredentials": {
+            "title": "Requires Client Credentials",
+            "type": "boolean"
+          }
+        }
+      },
+      "OAuthStatusResponse": {
+        "type": "object",
+        "title": "OAuthStatusResponse",
+        "required": [
+          "isConnected"
+        ],
+        "properties": {
+          "isConnected": {
+            "title": "Is Connected",
+            "type": "boolean"
+          }
+        }
       },
       "PayloadTransformer": {
         "properties": {
@@ -2182,7 +2327,8 @@
           },
           "origin": {
             "title": "Origin",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           },
           "processor": {
             "title": "Processor",
@@ -2204,7 +2350,8 @@
           },
           "result": {
             "title": "Result",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           },
           "to_topics": {
             "items": {
@@ -2713,6 +2860,53 @@
         "title": "RoutingSlip",
         "type": "object"
       },
+      "SecretDeleteResponse": {
+        "type": "object",
+        "title": "SecretDeleteResponse",
+        "required": [
+          "name",
+          "deleted"
+        ],
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          }
+        }
+      },
+      "SecretListResponse": {
+        "type": "object",
+        "title": "SecretListResponse",
+        "required": [
+          "secrets"
+        ],
+        "properties": {
+          "secrets": {
+            "title": "Secrets",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SecretResponse": {
+        "type": "object",
+        "title": "SecretResponse",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        }
+      },
       "SendMessageCall": {
         "properties": {
           "call_type": {
@@ -2829,6 +3023,20 @@
         ],
         "title": "TypeEqualsPredicate",
         "type": "object"
+      },
+      "UpdateSecretRequest": {
+        "type": "object",
+        "title": "UpdateSecretRequest",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "string",
+            "description": "The secret value, base64-encoded (standard encoding)."
+          }
+        }
       },
       "ValidationError": {
         "properties": {
@@ -5220,111 +5428,6 @@
         "summary": "Create Category"
       }
     },
-    "/catalog/categories/{category_id}": {
-      "get": {
-        "operationId": "getCategoryById",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "category_id",
-            "required": true,
-            "schema": {
-              "title": "Category Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "sqldb",
-            "required": false,
-            "schema": {
-              "default": "sqlite:///rustic_app.db",
-              "title": "Sqldb",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BlueprintCategoryResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Category"
-      }
-    },
-    "/catalog/categories/{category_name}/blueprints/": {
-      "get": {
-        "operationId": "getBlueprintsByCategoryName",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "category_name",
-            "required": true,
-            "schema": {
-              "title": "Category Name",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "sqldb",
-            "required": false,
-            "schema": {
-              "default": "sqlite:///rustic_app.db",
-              "title": "Sqldb",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/BlueprintCategoryResponse"
-                  },
-                  "title": "Response Getblueprintsbycategoryname",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Category Blueprints",
-        "tags": [
-          "blueprints"
-        ]
-      }
-    },
     "/catalog/guilds/{guild_id}/blueprints/": {
       "get": {
         "operationId": "getBlueprintForGuild",
@@ -6050,6 +6153,512 @@
         "summary": "Get Guilds For User",
         "tags": [
           "users"
+        ]
+      }
+    },
+    "/organizations/{org_id}/secrets": {
+      "get": {
+        "tags": [
+          "secrets"
+        ],
+        "summary": "List Organization Secrets",
+        "operationId": "listOrganizationSecrets",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "secrets"
+        ],
+        "summary": "Create Organization Secret",
+        "operationId": "createOrganizationSecret",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/{org_id}/secrets/{name}": {
+      "put": {
+        "tags": [
+          "secrets"
+        ],
+        "summary": "Update Organization Secret",
+        "operationId": "updateOrganizationSecret",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "secrets"
+        ],
+        "summary": "Delete Organization Secret",
+        "operationId": "deleteOrganizationSecret",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretDeleteResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/organizations/{org_id}/providers": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "List OAuth Providers",
+        "operationId": "listOAuthProviders",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OAuthProviderStatus"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/organizations/{org_id}/providers/{provider_id}/authorize": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Authorize OAuth Provider",
+        "operationId": "authorizeOAuthProvider",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/callback": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "OAuth Callback",
+        "operationId": "oauthCallback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page indicating success or failure.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/organizations/{org_id}/providers/{provider_id}/status": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Get OAuth Provider Status",
+        "operationId": "getOAuthProviderStatus",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/organizations/{org_id}/providers/{provider_id}": {
+      "delete": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Disconnect OAuth Provider",
+        "operationId": "disconnectOAuthProvider",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthDisconnectResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/categories/{category}": {
+      "get": {
+        "operationId": "getCategoryById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category",
+            "required": true,
+            "schema": {
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sqldb",
+            "required": false,
+            "schema": {
+              "default": "sqlite:///rustic_app.db",
+              "title": "Sqldb",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlueprintCategoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Category"
+      }
+    },
+    "/catalog/categories/{category}/blueprints/": {
+      "get": {
+        "operationId": "getBlueprintsByCategoryName",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category",
+            "required": true,
+            "schema": {
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sqldb",
+            "required": false,
+            "schema": {
+              "default": "sqlite:///rustic_app.db",
+              "title": "Sqldb",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BlueprintCategoryResponse"
+                  },
+                  "title": "Response Getblueprintsbycategoryname",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Category Blueprints",
+        "tags": [
+          "blueprints"
         ]
       }
     }

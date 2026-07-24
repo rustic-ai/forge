@@ -276,3 +276,86 @@ func (s *Server) GetUserBlueprints(c *gin.Context, userID string, _ contract.Get
 func (s *Server) GetGuildsForUser(c *gin.Context, userID string, _ contract.GetGuildsForUserParams) {
 	s.dispatch(c, handleGetGuildsForUser(s.store), map[string]string{"user_id": userID})
 }
+
+// Secrets and OAuth are optional features: their routes are always part of the
+// generated contract, but the handlers return 404 unless the corresponding
+// manager has been configured (e.g. desktop mode).
+
+func (s *Server) secretsEnabled(c *gin.Context) bool {
+	if s.secretManager == nil {
+		ReplyError(c.Writer, http.StatusNotFound, "secrets API is not enabled")
+		return false
+	}
+	return true
+}
+
+func (s *Server) ListOrganizationSecrets(c *gin.Context, orgID string) {
+	if !s.secretsEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleListSecrets(), map[string]string{"org_id": orgID})
+}
+
+func (s *Server) CreateOrganizationSecret(c *gin.Context, orgID string) {
+	if !s.secretsEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleCreateSecret(), map[string]string{"org_id": orgID})
+}
+
+func (s *Server) UpdateOrganizationSecret(c *gin.Context, orgID, name string) {
+	if !s.secretsEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleUpdateSecret(), map[string]string{"org_id": orgID, "name": name})
+}
+
+func (s *Server) DeleteOrganizationSecret(c *gin.Context, orgID, name string) {
+	if !s.secretsEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleDeleteSecret(), map[string]string{"org_id": orgID, "name": name})
+}
+
+func (s *Server) oauthEnabled(c *gin.Context) bool {
+	if s.oauthManager == nil {
+		ReplyError(c.Writer, http.StatusNotFound, "oauth API is not enabled")
+		return false
+	}
+	return true
+}
+
+func (s *Server) ListOAuthProviders(c *gin.Context, orgID string) {
+	if !s.oauthEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleOAuthListProviders(), map[string]string{"org_id": orgID})
+}
+
+func (s *Server) AuthorizeOAuthProvider(c *gin.Context, orgID, providerID string) {
+	if !s.oauthEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleOAuthAuthorize(), map[string]string{"org_id": orgID, "provider_id": providerID})
+}
+
+func (s *Server) OauthCallback(c *gin.Context, _ contract.OauthCallbackParams) {
+	if !s.oauthEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleOAuthCallback(), nil)
+}
+
+func (s *Server) GetOAuthProviderStatus(c *gin.Context, orgID, providerID string) {
+	if !s.oauthEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleOAuthStatus(), map[string]string{"org_id": orgID, "provider_id": providerID})
+}
+
+func (s *Server) DisconnectOAuthProvider(c *gin.Context, orgID, providerID string) {
+	if !s.oauthEnabled(c) {
+		return
+	}
+	s.dispatch(c, s.handleOAuthDisconnect(), map[string]string{"org_id": orgID, "provider_id": providerID})
+}

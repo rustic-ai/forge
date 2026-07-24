@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.23.0",
+    "generators": {
+      "api-client": {
+        "generatorName": "typescript-axios",
+        "output": "src",
+        "inputSpec": "../../forge-go/api/openapi/openapi.json",
+        "typeMappings": {
+          "long": "bigint"
+        },
+        "languageSpecificPrimitives": "bigint",
+        "additionalProperties": {
+          "useSingleRequestParameter": true,
+          "supportsES6": true
+        }
+      }
+    }
+  }
+}

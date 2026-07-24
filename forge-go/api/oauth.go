@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 	"unicode"
-
-	"github.com/gin-gonic/gin"
 )
 
 type authorizeRequest struct {
@@ -36,15 +34,18 @@ func validateOrgID(id string) error {
 	return nil
 }
 
-func (s *Server) registerOAuthRoutes(router *gin.Engine, prefix string) {
-	s.oauthRoutePrefix = prefix
-	router.GET(prefix+"/oauth/organizations/:org_id/providers", wrapHTTPWithPathValues(s.handleOAuthListProviders(), "org_id"))
-	router.POST(prefix+"/oauth/organizations/:org_id/providers/:provider_id/authorize", wrapHTTPWithPathValues(s.handleOAuthAuthorize(), "org_id", "provider_id"))
-	// Single, provider- and org-agnostic callback for every provider: the flow is
-	// identified entirely by the opaque state inside ExchangeCode.
-	router.GET(prefix+"/oauth/callback", wrapHTTP(s.handleOAuthCallback()))
-	router.GET(prefix+"/oauth/organizations/:org_id/providers/:provider_id/status", wrapHTTPWithPathValues(s.handleOAuthStatus(), "org_id", "provider_id"))
-	router.DELETE(prefix+"/oauth/organizations/:org_id/providers/:provider_id", wrapHTTPWithPathValues(s.handleOAuthDisconnect(), "org_id", "provider_id"))
+// The OAuth endpoints are part of the generated contract (see
+// api/contract_server.go). They are served both bare and under /rustic, so the
+// callback URL prefix is derived from the incoming request rather than fixed at
+// registration time.
+//
+// The callback itself is provider- and org-agnostic: the flow is identified
+// entirely by the opaque state inside ExchangeCode.
+func oauthRoutePrefix(r *http.Request) string {
+	if strings.HasPrefix(r.URL.Path, "/rustic/") {
+		return "/rustic"
+	}
+	return ""
 }
 
 func (s *Server) handleOAuthListProviders() http.HandlerFunc {
@@ -54,7 +55,7 @@ func (s *Server) handleOAuthListProviders() http.HandlerFunc {
 			ReplyError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		ReplyJSON(w, http.StatusOK, s.oauthManager.ListProviders(orgID, s.publicBaseURL()+s.oauthRoutePrefix))
+		ReplyJSON(w, http.StatusOK, s.oauthManager.ListProviders(orgID, s.publicBaseURL()+oauthRoutePrefix(r)))
 	}
 }
 
@@ -94,7 +95,7 @@ func (s *Server) handleOAuthAuthorize() http.HandlerFunc {
 		if redirectURL == "" {
 			// Single constant callback for all providers; the flow is identified
 			// by state at callback time.
-			redirectURL = s.publicBaseURL() + s.oauthRoutePrefix + "/oauth/callback"
+			redirectURL = s.publicBaseURL() + oauthRoutePrefix(r) + "/oauth/callback"
 		}
 
 		authURL, _, err := s.oauthManager.GetAuthURL(r.Context(), orgID, providerID, clientID, clientSecret, redirectURL)
