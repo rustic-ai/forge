@@ -117,7 +117,7 @@ jobs:
           echo "publish_target=$publish_target" >> "$GITHUB_OUTPUT"
           echo "skip_release=$skip_release" >> "$GITHUB_OUTPUT"
 
-  verify-release:
+  verify-release-code:
     runs-on: ubuntu-latest
     needs: prepare-release
     if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
@@ -152,20 +152,45 @@ jobs:
           enable-cache: true
           cache-dependency-glob: forge-python/uv.lock
 
-      - name: Install release verification tools
+      - name: Install code verification tool
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/forge-release-tools"
           GOBIN="$RUNNER_TEMP/forge-release-tools" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
+          echo "$RUNNER_TEMP/forge-release-tools" >> "$GITHUB_PATH"
+
+      - name: Run code verification
+        run: ./scripts/verify-release.sh "${{ needs.prepare-release.outputs.version }}" checks
+
+  verify-release-package:
+    runs-on: ubuntu-latest
+    needs: prepare-release
+    if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.commit }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: forge-go/go.mod
+          cache: true
+
+      - name: Install package verification tool
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/forge-release-tools"
           GOBIN="$RUNNER_TEMP/forge-release-tools" go install github.com/goreleaser/goreleaser/v2@v2.14.3
           echo "$RUNNER_TEMP/forge-release-tools" >> "$GITHUB_PATH"
 
-      - name: Run release gate
-        run: ./scripts/verify-release.sh "${{ needs.prepare-release.outputs.version }}"
+      - name: Run package verification
+        run: ./scripts/verify-release.sh "${{ needs.prepare-release.outputs.version }}" package
 
   create-release-tag:
     runs-on: ubuntu-latest
-    needs: [prepare-release, verify-release]
+    needs: [prepare-release, verify-release-code, verify-release-package]
     if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
     permissions:
       contents: write
@@ -216,7 +241,7 @@ jobs:
 
   build-python:
     runs-on: ubuntu-latest
-    needs: [prepare-release, verify-release, create-release-tag]
+    needs: [prepare-release, create-release-tag]
     if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
     steps:
       - uses: actions/checkout@v4
@@ -248,7 +273,7 @@ jobs:
 
   release-go:
     runs-on: ubuntu-latest
-    needs: [prepare-release, verify-release, create-release-tag]
+    needs: [prepare-release, create-release-tag]
     if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
     permissions:
       contents: write
@@ -276,7 +301,7 @@ jobs:
 
   publish-python:
     runs-on: ubuntu-latest
-    needs: [prepare-release, verify-release, create-release-tag, build-python, release-go]
+    needs: [prepare-release, build-python, release-go]
     if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
     environment:
       name: ${{ needs.prepare-release.outputs.publish_target }}
@@ -311,7 +336,7 @@ jobs:
 
   publish-ts-client:
     runs-on: ubuntu-latest
-    needs: [prepare-release, verify-release, create-release-tag]
+    needs: [prepare-release, create-release-tag]
     if: ${{ needs.prepare-release.outputs.skip_release != 'true' }}
     permissions:
       contents: read

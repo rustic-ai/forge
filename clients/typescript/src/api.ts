@@ -148,6 +148,7 @@ export interface AuthorizeResponse {
     'authUrl': string;
 }
 export interface BasicGuildInfo {
+    'created_by': string;
     'blueprint_id'?: string | null;
     'icon'?: string | null;
     'id': string;
@@ -295,6 +296,16 @@ export const CelPredicatePredicateTypeEnum = {
 
 export type CelPredicatePredicateTypeEnum = typeof CelPredicatePredicateTypeEnum[keyof typeof CelPredicatePredicateTypeEnum];
 
+export interface ConfiguredDependencyEntry {
+    'key': string;
+    'display_name': string;
+    'description'?: string;
+    'provided_type': string;
+    'provider'?: string;
+    'capabilities': Array<string>;
+    'aliases': Array<string>;
+    'availability': DependencyAvailability;
+}
 export interface CreateBoardRequest {
     'created_by': string;
     'guild_id': string;
@@ -311,6 +322,20 @@ export interface CreateSecretRequest {
 }
 export interface CustomResourcesValue {
 }
+export interface DependencyAvailability {
+    'status': DependencyAvailabilityStatusEnum;
+    'reasons': Array<string>;
+}
+
+export const DependencyAvailabilityStatusEnum = {
+    Ready: 'ready',
+    NeedsConfiguration: 'needs_configuration',
+    Unavailable: 'unavailable',
+    Unknown: 'unknown',
+} as const;
+
+export type DependencyAvailabilityStatusEnum = typeof DependencyAvailabilityStatusEnum[keyof typeof DependencyAvailabilityStatusEnum];
+
 export interface DependencySpec {
     'class_name': string;
     'properties'?: { [key: string]: any; };
@@ -345,7 +370,7 @@ export interface GatewayConfig {
     'returned_formats'?: Array<string>;
 }
 export interface GetOpenapiSha256200Response {
-    'sha256'?: string;
+    'sha256'?: string | null;
 }
 /**
  * A specification for a guild that describes its name, description, and agents.  Attributes:     name (str): The name of the guild.     description (str): A description of the guild.     properties (Dict[str, Any]): The properties of the guild.     agents (list[AgentSpec]): A list of agents in the guild.     dependency_map (Dict[str, DependencySpec]): A mapping for guild\'s dependency to resolver class.     routes (RoutingSlip): The routes to be attached to every message coming in the guild.     gateway (Optional[GatewayConfig]): Configuration for the automatic GatewayAgent.
@@ -364,6 +389,7 @@ export interface GuildSpec {
  * Response for a guild specification that describes its name, description, agents, routes, and status.
  */
 export interface GuildSpecResponse {
+    'created_by': string;
     'agents'?: Array<AgentSpecInput>;
     'dependency_map'?: { [key: string]: DependencySpec; };
     'description': string;
@@ -448,14 +474,161 @@ export type JSONataPredicatePredicateTypeEnum = typeof JSONataPredicatePredicate
 export interface LaunchGuildFromBlueprintRequest {
     'configuration'?: { [key: string]: any; };
     'description'?: string | null;
+    'fingerprint': string;
     'guild_id'?: string | null;
     'guild_name': string;
     'org_id': string;
+    'preflight_id': string;
+    'preparation_id': string;
     'user_id': string;
 }
 export interface LaunchGuildReq {
     'org_id': string;
     'spec': GuildSpec;
+    'user_id': string;
+}
+export interface LaunchOAuthActionRequest {
+    'clientId'?: string;
+    'clientSecret'?: string;
+}
+/**
+ * Request to evaluate the exact blueprint launch plan before launch.
+ */
+export interface LaunchPreflightRequest {
+    'configuration'?: { [key: string]: any; };
+    'description'?: string | null;
+    'guild_id': string;
+    'guild_name': string;
+    'org_id': string;
+    'user_id': string;
+}
+export interface LaunchPreflightResponse {
+    'expires_at': string;
+    'fingerprint': string;
+    'id': string;
+    'ready': boolean;
+    'requirements': Array<LaunchRequirement>;
+    'status': LaunchPreflightResponseStatusEnum;
+}
+
+export const LaunchPreflightResponseStatusEnum = {
+    Ready: 'ready',
+    Blocked: 'blocked',
+} as const;
+
+export type LaunchPreflightResponseStatusEnum = typeof LaunchPreflightResponseStatusEnum[keyof typeof LaunchPreflightResponseStatusEnum];
+
+export interface LaunchPreparationError {
+    'code': string;
+    'message': string;
+}
+/**
+ * Exact blueprint launch intent to prepare before launch.
+ */
+export interface LaunchPreparationRequest {
+    'configuration'?: { [key: string]: any; };
+    'description'?: string | null;
+    'fingerprint': string | null;
+    'guild_id': string | null;
+    'guild_name': string | null;
+    'org_id': string | null;
+    'preflight_id': string | null;
+    'user_id': string | null;
+}
+export interface LaunchPreparationResponse {
+    'id': string;
+    'fingerprint': string;
+    'status': LaunchPreparationResponseStatusEnum;
+    'phase': LaunchPreparationResponsePhaseEnum;
+    'completed_units': number;
+    'total_units': number;
+    'cached_units': number;
+    'expires_at': string;
+    'error'?: LaunchPreparationError;
+}
+
+export const LaunchPreparationResponseStatusEnum = {
+    Queued: 'queued',
+    Preparing: 'preparing',
+    Ready: 'ready',
+    Failed: 'failed',
+    Canceled: 'canceled',
+} as const;
+
+export type LaunchPreparationResponseStatusEnum = typeof LaunchPreparationResponseStatusEnum[keyof typeof LaunchPreparationResponseStatusEnum];
+export const LaunchPreparationResponsePhaseEnum = {
+    PythonRuntime: 'python_runtime',
+    AgentEnvironments: 'agent_environments',
+    Complete: 'complete',
+} as const;
+
+export type LaunchPreparationResponsePhaseEnum = typeof LaunchPreparationResponsePhaseEnum[keyof typeof LaunchPreparationResponsePhaseEnum];
+
+export interface LaunchRequirement {
+    'action'?: LaunchRequirementAction | null;
+    'id': string;
+    'kind': LaunchRequirementKindEnum;
+    'label': string;
+    'missing_scopes'?: Array<string>;
+    'optional': boolean;
+    'scopes'?: Array<string>;
+    'sources': Array<LaunchRequirementSource>;
+    'status': LaunchRequirementStatusEnum;
+}
+
+export const LaunchRequirementKindEnum = {
+    Secret: 'secret',
+    Oauth: 'oauth',
+} as const;
+
+export type LaunchRequirementKindEnum = typeof LaunchRequirementKindEnum[keyof typeof LaunchRequirementKindEnum];
+export const LaunchRequirementStatusEnum = {
+    Configured: 'configured',
+    Missing: 'missing',
+    InsufficientScope: 'insufficient_scope',
+    ProviderUnavailable: 'provider_unavailable',
+} as const;
+
+export type LaunchRequirementStatusEnum = typeof LaunchRequirementStatusEnum[keyof typeof LaunchRequirementStatusEnum];
+
+export interface LaunchRequirementAction {
+    'href': string;
+    'kind': string;
+    'method': string;
+    'requires_client_credentials'?: boolean;
+}
+export interface LaunchRequirementConfiguredResponse {
+    'configured': boolean;
+}
+export interface LaunchRequirementSource {
+    'agent_id': string;
+    'agent_name': string;
+    'origin': LaunchRequirementSourceOriginEnum;
+    'profile_key'?: string;
+    'profile_name'?: string;
+}
+
+export const LaunchRequirementSourceOriginEnum = {
+    Agent: 'agent',
+    Profile: 'profile',
+} as const;
+
+export type LaunchRequirementSourceOriginEnum = typeof LaunchRequirementSourceOriginEnum[keyof typeof LaunchRequirementSourceOriginEnum];
+
+export interface LaunchSecretActionRequest {
+    'value': string;
+}
+export interface ListNodes200ResponseInner {
+    'node_id': string | null;
+    'total_capacity': ListNodes200ResponseInnerTotalCapacity;
+    'used_capacity': ListNodes200ResponseInnerTotalCapacity;
+    'ready_dependency_profiles': Array<string>;
+    'last_heartbeat': string;
+}
+export interface ListNodes200ResponseInnerTotalCapacity {
+    'cpus'?: number;
+    'memory'?: number;
+    'gpus'?: number;
 }
 export interface LocationInner {
 }
@@ -516,6 +689,9 @@ export interface Message {
 }
 
 
+export interface NodeHeartbeatRequest {
+    'ready_dependency_profiles'?: Array<string>;
+}
 export interface NumCpus {
 }
 export interface NumGpus {
@@ -605,11 +781,8 @@ export interface QOSSpec {
     'timeout'?: number | null;
 }
 export interface RegisterNodeRequest {
-    'node_id': string;
+    'node_id': string | null;
     'capacity': RegisterNodeRequestCapacity;
-    'ready_dependency_profiles'?: Array<string>;
-}
-export interface NodeHeartbeatRequest {
     'ready_dependency_profiles'?: Array<string>;
 }
 export interface RegisterNodeRequestCapacity {
@@ -677,6 +850,10 @@ export interface RoutingSlipInput {
  */
 export interface RoutingSlipOutput {
     'steps'?: Array<RoutingRuleInput>;
+}
+export interface RusticCapabilitiesResponse {
+    'capabilities': Array<string>;
+    'version': string;
 }
 export interface SecretDeleteResponse {
     'name': string;
@@ -1320,6 +1497,45 @@ export const BlueprintsApiAxiosParamCreator = function (configuration?: Configur
         },
         /**
          * 
+         * @summary Create Launch Preparation
+         * @param {string} blueprintId 
+         * @param {LaunchPreparationRequest} launchPreparationRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        createLaunchPreparation: async (blueprintId: string, launchPreparationRequest: LaunchPreparationRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'blueprintId' is not null or undefined
+            assertParamExists('createLaunchPreparation', 'blueprintId', blueprintId)
+            // verify required parameter 'launchPreparationRequest' is not null or undefined
+            assertParamExists('createLaunchPreparation', 'launchPreparationRequest', launchPreparationRequest)
+            const localVarPath = `/catalog/blueprints/{blueprint_id}/guilds/preparations`
+                .replace('{blueprint_id}', encodeURIComponent(String(blueprintId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(launchPreparationRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Get User Accessible Blueprints
          * @param {string} userId 
          * @param {string | null} [orgId] 
@@ -1911,6 +2127,45 @@ export const BlueprintsApiAxiosParamCreator = function (configuration?: Configur
         },
         /**
          * 
+         * @summary Preflight Guild From Blueprint
+         * @param {string | null} blueprintId 
+         * @param {LaunchPreflightRequest} launchPreflightRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        preflightGuildFromBlueprint: async (blueprintId: string | null, launchPreflightRequest: LaunchPreflightRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'blueprintId' is not null or undefined
+            assertParamExists('preflightGuildFromBlueprint', 'blueprintId', blueprintId)
+            // verify required parameter 'launchPreflightRequest' is not null or undefined
+            assertParamExists('preflightGuildFromBlueprint', 'launchPreflightRequest', launchPreflightRequest)
+            const localVarPath = `/catalog/blueprints/{blueprint_id}/guilds/preflight`
+                .replace('{blueprint_id}', encodeURIComponent(String(blueprintId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(launchPreflightRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Share Blueprint With Organization
          * @param {string} blueprintId 
          * @param {ShareWithOrgRequest} shareWithOrgRequest 
@@ -2063,6 +2318,20 @@ export const BlueprintsApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.createBlueprintReview(blueprintId, blueprintReviewCreate, sqldb, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['BlueprintsApi.createBlueprintReview']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Create Launch Preparation
+         * @param {string} blueprintId 
+         * @param {LaunchPreparationRequest} launchPreparationRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async createLaunchPreparation(blueprintId: string, launchPreparationRequest: LaunchPreparationRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<LaunchPreparationResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.createLaunchPreparation(blueprintId, launchPreparationRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['BlueprintsApi.createLaunchPreparation']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -2278,6 +2547,20 @@ export const BlueprintsApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Preflight Guild From Blueprint
+         * @param {string | null} blueprintId 
+         * @param {LaunchPreflightRequest} launchPreflightRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async preflightGuildFromBlueprint(blueprintId: string | null, launchPreflightRequest: LaunchPreflightRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<LaunchPreflightResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.preflightGuildFromBlueprint(blueprintId, launchPreflightRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['BlueprintsApi.preflightGuildFromBlueprint']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Share Blueprint With Organization
          * @param {string} blueprintId 
          * @param {ShareWithOrgRequest} shareWithOrgRequest 
@@ -2354,6 +2637,16 @@ export const BlueprintsApiFactory = function (configuration?: Configuration, bas
          */
         createBlueprintReview(requestParameters: BlueprintsApiCreateBlueprintReviewRequest, options?: RawAxiosRequestConfig): AxiosPromise<IdInfo> {
             return localVarFp.createBlueprintReview(requestParameters.blueprintId, requestParameters.blueprintReviewCreate, requestParameters.sqldb, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Create Launch Preparation
+         * @param {BlueprintsApiCreateLaunchPreparationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        createLaunchPreparation(requestParameters: BlueprintsApiCreateLaunchPreparationRequest, options?: RawAxiosRequestConfig): AxiosPromise<LaunchPreparationResponse> {
+            return localVarFp.createLaunchPreparation(requestParameters.blueprintId, requestParameters.launchPreparationRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -2507,6 +2800,16 @@ export const BlueprintsApiFactory = function (configuration?: Configuration, bas
         },
         /**
          * 
+         * @summary Preflight Guild From Blueprint
+         * @param {BlueprintsApiPreflightGuildFromBlueprintRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        preflightGuildFromBlueprint(requestParameters: BlueprintsApiPreflightGuildFromBlueprintRequest, options?: RawAxiosRequestConfig): AxiosPromise<LaunchPreflightResponse> {
+            return localVarFp.preflightGuildFromBlueprint(requestParameters.blueprintId, requestParameters.launchPreflightRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Share Blueprint With Organization
          * @param {BlueprintsApiShareBlueprintWithOrganizationRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -2570,6 +2873,15 @@ export interface BlueprintsApiCreateBlueprintReviewRequest {
     readonly blueprintReviewCreate: BlueprintReviewCreate
 
     readonly sqldb?: string
+}
+
+/**
+ * Request parameters for createLaunchPreparation operation in BlueprintsApi.
+ */
+export interface BlueprintsApiCreateLaunchPreparationRequest {
+    readonly blueprintId: string
+
+    readonly launchPreparationRequest: LaunchPreparationRequest
 }
 
 /**
@@ -2710,6 +3022,15 @@ export interface BlueprintsApiListTagsRequest {
 }
 
 /**
+ * Request parameters for preflightGuildFromBlueprint operation in BlueprintsApi.
+ */
+export interface BlueprintsApiPreflightGuildFromBlueprintRequest {
+    readonly blueprintId: string | null
+
+    readonly launchPreflightRequest: LaunchPreflightRequest
+}
+
+/**
  * Request parameters for shareBlueprintWithOrganization operation in BlueprintsApi.
  */
 export interface BlueprintsApiShareBlueprintWithOrganizationRequest {
@@ -2777,6 +3098,17 @@ export class BlueprintsApi extends BaseAPI {
      */
     public createBlueprintReview(requestParameters: BlueprintsApiCreateBlueprintReviewRequest, options?: RawAxiosRequestConfig) {
         return BlueprintsApiFp(this.configuration).createBlueprintReview(requestParameters.blueprintId, requestParameters.blueprintReviewCreate, requestParameters.sqldb, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Create Launch Preparation
+     * @param {BlueprintsApiCreateLaunchPreparationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public createLaunchPreparation(requestParameters: BlueprintsApiCreateLaunchPreparationRequest, options?: RawAxiosRequestConfig) {
+        return BlueprintsApiFp(this.configuration).createLaunchPreparation(requestParameters.blueprintId, requestParameters.launchPreparationRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -2942,6 +3274,17 @@ export class BlueprintsApi extends BaseAPI {
      */
     public listTags(requestParameters: BlueprintsApiListTagsRequest = {}, options?: RawAxiosRequestConfig) {
         return BlueprintsApiFp(this.configuration).listTags(requestParameters.sqldb, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Preflight Guild From Blueprint
+     * @param {BlueprintsApiPreflightGuildFromBlueprintRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public preflightGuildFromBlueprint(requestParameters: BlueprintsApiPreflightGuildFromBlueprintRequest, options?: RawAxiosRequestConfig) {
+        return BlueprintsApiFp(this.configuration).preflightGuildFromBlueprint(requestParameters.blueprintId, requestParameters.launchPreflightRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3565,6 +3908,58 @@ export const DefaultApiAxiosParamCreator = function (configuration?: Configurati
         },
         /**
          * 
+         * @summary Permanently delete a quiescent guild
+         * @param {string | null} guildId 
+         * @param {string | null} userId 
+         * @param {string | null} orgId 
+         * @param {boolean} [force] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteGuild: async (guildId: string | null, userId: string | null, orgId: string | null, force?: boolean, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'guildId' is not null or undefined
+            assertParamExists('deleteGuild', 'guildId', guildId)
+            // verify required parameter 'userId' is not null or undefined
+            assertParamExists('deleteGuild', 'userId', userId)
+            // verify required parameter 'orgId' is not null or undefined
+            assertParamExists('deleteGuild', 'orgId', orgId)
+            const localVarPath = `/api/guilds/{guild_id}`
+                .replace('{guild_id}', encodeURIComponent(String(guildId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (userId !== undefined) {
+                localVarQueryParameter['user_id'] = userId;
+            }
+
+            if (orgId !== undefined) {
+                localVarQueryParameter['org_id'] = orgId;
+            }
+
+            if (force !== undefined) {
+                localVarQueryParameter['force'] = force;
+            }
+
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Delete File For Guild
          * @param {string} guildId 
          * @param {string} filename 
@@ -3811,6 +4206,36 @@ export const DefaultApiAxiosParamCreator = function (configuration?: Configurati
             if (sqldb !== undefined) {
                 localVarQueryParameter['sqldb'] = sqldb;
             }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Get Forge Capabilities
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getForgeCapabilities: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/capabilities`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
 
             localVarHeaderParameter['Accept'] = 'application/json';
 
@@ -4242,11 +4667,12 @@ export const DefaultApiAxiosParamCreator = function (configuration?: Configurati
         /**
          * 
          * @summary Node Heartbeat
-         * @param {string} nodeId 
+         * @param {string | null} nodeId 
+         * @param {NodeHeartbeatRequest} [nodeHeartbeatRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        nodeHeartbeat: async (nodeId: string, nodeHeartbeatRequest?: NodeHeartbeatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        nodeHeartbeat: async (nodeId: string | null, nodeHeartbeatRequest?: NodeHeartbeatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'nodeId' is not null or undefined
             assertParamExists('nodeHeartbeat', 'nodeId', nodeId)
             const localVarPath = `/nodes/{node_id}/heartbeat`
@@ -4262,8 +4688,8 @@ export const DefaultApiAxiosParamCreator = function (configuration?: Configurati
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
-
             localVarHeaderParameter['Content-Type'] = 'application/json';
+
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
@@ -4543,6 +4969,22 @@ export const DefaultApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Permanently delete a quiescent guild
+         * @param {string | null} guildId 
+         * @param {string | null} userId 
+         * @param {string | null} orgId 
+         * @param {boolean} [force] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async deleteGuild(guildId: string | null, userId: string | null, orgId: string | null, force?: boolean, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.deleteGuild(guildId, userId, orgId, force, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['DefaultApi.deleteGuild']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Delete File For Guild
          * @param {string} guildId 
          * @param {string} filename 
@@ -4629,6 +5071,18 @@ export const DefaultApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.getFileForGuild(guildId, filename, download, sqldb, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['DefaultApi.getFileForGuild']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Get Forge Capabilities
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getForgeCapabilities(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RusticCapabilitiesResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getForgeCapabilities(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['DefaultApi.getForgeCapabilities']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4781,7 +5235,7 @@ export const DefaultApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listNodes(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<any>>> {
+        async listNodes(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<ListNodes200ResponseInner>>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.listNodes(options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['DefaultApi.listNodes']?.[localVarOperationServerIndex]?.url;
@@ -4790,11 +5244,12 @@ export const DefaultApiFp = function(configuration?: Configuration) {
         /**
          * 
          * @summary Node Heartbeat
-         * @param {string} nodeId 
+         * @param {string | null} nodeId 
+         * @param {NodeHeartbeatRequest} [nodeHeartbeatRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async nodeHeartbeat(nodeId: string, nodeHeartbeatRequest?: NodeHeartbeatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+        async nodeHeartbeat(nodeId: string | null, nodeHeartbeatRequest?: NodeHeartbeatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.nodeHeartbeat(nodeId, nodeHeartbeatRequest, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['DefaultApi.nodeHeartbeat']?.[localVarOperationServerIndex]?.url;
@@ -4913,6 +5368,16 @@ export const DefaultApiFactory = function (configuration?: Configuration, basePa
         },
         /**
          * 
+         * @summary Permanently delete a quiescent guild
+         * @param {DefaultApiDeleteGuildRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteGuild(requestParameters: DefaultApiDeleteGuildRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.deleteGuild(requestParameters.guildId, requestParameters.userId, requestParameters.orgId, requestParameters.force, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Delete File For Guild
          * @param {DefaultApiDeleteGuildFileRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -4970,6 +5435,15 @@ export const DefaultApiFactory = function (configuration?: Configuration, basePa
          */
         getFileForGuild(requestParameters: DefaultApiGetFileForGuildRequest, options?: RawAxiosRequestConfig): AxiosPromise<any> {
             return localVarFp.getFileForGuild(requestParameters.guildId, requestParameters.filename, requestParameters.download, requestParameters.sqldb, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Get Forge Capabilities
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getForgeCapabilities(options?: RawAxiosRequestConfig): AxiosPromise<RusticCapabilitiesResponse> {
+            return localVarFp.getForgeCapabilities(options).then((request) => request(axios, basePath));
         },
         /**
          * Retrieves details for a guild based on the provided guild_id.  Args:     guild_id (str): The ID of the guild to retrieve details for.  Returns:     GuildSpecResponse: The retrieved guild details, or None if the guild was not found.  Raises:     HTTPException: If the guild is not found, raises an HTTPException with a status code of 404.
@@ -5082,7 +5556,7 @@ export const DefaultApiFactory = function (configuration?: Configuration, basePa
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listNodes(options?: RawAxiosRequestConfig): AxiosPromise<Array<any>> {
+        listNodes(options?: RawAxiosRequestConfig): AxiosPromise<Array<ListNodes200ResponseInner>> {
             return localVarFp.listNodes(options).then((request) => request(axios, basePath));
         },
         /**
@@ -5174,6 +5648,19 @@ export interface DefaultApiDeleteAgentFileRequest {
     readonly filename: string
 
     readonly sqldb?: string
+}
+
+/**
+ * Request parameters for deleteGuild operation in DefaultApi.
+ */
+export interface DefaultApiDeleteGuildRequest {
+    readonly guildId: string | null
+
+    readonly userId: string | null
+
+    readonly orgId: string | null
+
+    readonly force?: boolean
 }
 
 /**
@@ -5300,7 +5787,8 @@ export interface DefaultApiListFilesForGuildRequest {
  * Request parameters for nodeHeartbeat operation in DefaultApi.
  */
 export interface DefaultApiNodeHeartbeatRequest {
-    readonly nodeId: string
+    readonly nodeId: string | null
+
     readonly nodeHeartbeatRequest?: NodeHeartbeatRequest
 }
 
@@ -5387,6 +5875,17 @@ export class DefaultApi extends BaseAPI {
 
     /**
      * 
+     * @summary Permanently delete a quiescent guild
+     * @param {DefaultApiDeleteGuildRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public deleteGuild(requestParameters: DefaultApiDeleteGuildRequest, options?: RawAxiosRequestConfig) {
+        return DefaultApiFp(this.configuration).deleteGuild(requestParameters.guildId, requestParameters.userId, requestParameters.orgId, requestParameters.force, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Delete File For Guild
      * @param {DefaultApiDeleteGuildFileRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -5449,6 +5948,16 @@ export class DefaultApi extends BaseAPI {
      */
     public getFileForGuild(requestParameters: DefaultApiGetFileForGuildRequest, options?: RawAxiosRequestConfig) {
         return DefaultApiFp(this.configuration).getFileForGuild(requestParameters.guildId, requestParameters.filename, requestParameters.download, requestParameters.sqldb, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Get Forge Capabilities
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public getForgeCapabilities(options?: RawAxiosRequestConfig) {
+        return DefaultApiFp(this.configuration).getForgeCapabilities(options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -5646,10 +6155,327 @@ export class DefaultApi extends BaseAPI {
 
 
 /**
+ * DependenciesApi - axios parameter creator
+ */
+export const DependenciesApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * 
+         * @summary List Configured Dependencies
+         * @param {string | null} [providedType] 
+         * @param {string | null} [capability] 
+         * @param {boolean} [includeUnavailable] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        listConfiguredDependencies: async (providedType?: string | null, capability?: string | null, includeUnavailable?: boolean, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/catalog/dependencies`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (providedType !== undefined) {
+                localVarQueryParameter['provided_type'] = providedType;
+            }
+
+            if (capability !== undefined) {
+                localVarQueryParameter['capability'] = capability;
+            }
+
+            if (includeUnavailable !== undefined) {
+                localVarQueryParameter['include_unavailable'] = includeUnavailable;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * DependenciesApi - functional programming interface
+ */
+export const DependenciesApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = DependenciesApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * 
+         * @summary List Configured Dependencies
+         * @param {string | null} [providedType] 
+         * @param {string | null} [capability] 
+         * @param {boolean} [includeUnavailable] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async listConfiguredDependencies(providedType?: string | null, capability?: string | null, includeUnavailable?: boolean, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<ConfiguredDependencyEntry>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listConfiguredDependencies(providedType, capability, includeUnavailable, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['DependenciesApi.listConfiguredDependencies']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * DependenciesApi - factory interface
+ */
+export const DependenciesApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = DependenciesApiFp(configuration)
+    return {
+        /**
+         * 
+         * @summary List Configured Dependencies
+         * @param {DependenciesApiListConfiguredDependenciesRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        listConfiguredDependencies(requestParameters: DependenciesApiListConfiguredDependenciesRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<Array<ConfiguredDependencyEntry>> {
+            return localVarFp.listConfiguredDependencies(requestParameters.providedType, requestParameters.capability, requestParameters.includeUnavailable, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * Request parameters for listConfiguredDependencies operation in DependenciesApi.
+ */
+export interface DependenciesApiListConfiguredDependenciesRequest {
+    readonly providedType?: string | null
+
+    readonly capability?: string | null
+
+    readonly includeUnavailable?: boolean
+}
+
+/**
+ * DependenciesApi - object-oriented interface
+ */
+export class DependenciesApi extends BaseAPI {
+    /**
+     * 
+     * @summary List Configured Dependencies
+     * @param {DependenciesApiListConfiguredDependenciesRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public listConfiguredDependencies(requestParameters: DependenciesApiListConfiguredDependenciesRequest = {}, options?: RawAxiosRequestConfig) {
+        return DependenciesApiFp(this.configuration).listConfiguredDependencies(requestParameters.providedType, requestParameters.capability, requestParameters.includeUnavailable, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
+
+/**
  * GuildsApi - axios parameter creator
  */
 export const GuildsApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
+        /**
+         * 
+         * @summary Authorize an opaque launch OAuth requirement
+         * @param {string} preflightId 
+         * @param {string} requirementId 
+         * @param {LaunchOAuthActionRequest} launchOAuthActionRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authorizeLaunchOAuth: async (preflightId: string, requirementId: string, launchOAuthActionRequest: LaunchOAuthActionRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preflightId' is not null or undefined
+            assertParamExists('authorizeLaunchOAuth', 'preflightId', preflightId)
+            // verify required parameter 'requirementId' is not null or undefined
+            assertParamExists('authorizeLaunchOAuth', 'requirementId', requirementId)
+            // verify required parameter 'launchOAuthActionRequest' is not null or undefined
+            assertParamExists('authorizeLaunchOAuth', 'launchOAuthActionRequest', launchOAuthActionRequest)
+            const localVarPath = `/catalog/launch-preflights/{preflight_id}/requirements/{requirement_id}/oauth`
+                .replace('{preflight_id}', encodeURIComponent(String(preflightId)))
+                .replace('{requirement_id}', encodeURIComponent(String(requirementId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(launchOAuthActionRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Cancel Launch Preparation
+         * @param {string} preparationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        cancelLaunchPreparation: async (preparationId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preparationId' is not null or undefined
+            assertParamExists('cancelLaunchPreparation', 'preparationId', preparationId)
+            const localVarPath = `/catalog/launch-preparations/{preparation_id}`
+                .replace('{preparation_id}', encodeURIComponent(String(preparationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Configure an opaque launch secret requirement
+         * @param {string | null} preflightId 
+         * @param {string | null} requirementId 
+         * @param {LaunchSecretActionRequest} launchSecretActionRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        configureLaunchSecret: async (preflightId: string | null, requirementId: string | null, launchSecretActionRequest: LaunchSecretActionRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preflightId' is not null or undefined
+            assertParamExists('configureLaunchSecret', 'preflightId', preflightId)
+            // verify required parameter 'requirementId' is not null or undefined
+            assertParamExists('configureLaunchSecret', 'requirementId', requirementId)
+            // verify required parameter 'launchSecretActionRequest' is not null or undefined
+            assertParamExists('configureLaunchSecret', 'launchSecretActionRequest', launchSecretActionRequest)
+            const localVarPath = `/catalog/launch-preflights/{preflight_id}/requirements/{requirement_id}/secret`
+                .replace('{preflight_id}', encodeURIComponent(String(preflightId)))
+                .replace('{requirement_id}', encodeURIComponent(String(requirementId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(launchSecretActionRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Create Launch Preparation
+         * @param {string} blueprintId 
+         * @param {LaunchPreparationRequest} launchPreparationRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        createLaunchPreparation: async (blueprintId: string, launchPreparationRequest: LaunchPreparationRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'blueprintId' is not null or undefined
+            assertParamExists('createLaunchPreparation', 'blueprintId', blueprintId)
+            // verify required parameter 'launchPreparationRequest' is not null or undefined
+            assertParamExists('createLaunchPreparation', 'launchPreparationRequest', launchPreparationRequest)
+            const localVarPath = `/catalog/blueprints/{blueprint_id}/guilds/preparations`
+                .replace('{blueprint_id}', encodeURIComponent(String(blueprintId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(launchPreparationRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Get Launch Preparation
+         * @param {string | null} preparationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getLaunchPreparation: async (preparationId: string | null, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preparationId' is not null or undefined
+            assertParamExists('getLaunchPreparation', 'preparationId', preparationId)
+            const localVarPath = `/catalog/launch-preparations/{preparation_id}`
+                .replace('{preparation_id}', encodeURIComponent(String(preparationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
         /**
          * Get the list of users added to a guild. This includes both active and inactive users.
          * @summary Get Guild Users
@@ -5733,6 +6559,45 @@ export const GuildsApiAxiosParamCreator = function (configuration?: Configuratio
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * 
+         * @summary Preflight Guild From Blueprint
+         * @param {string | null} blueprintId 
+         * @param {LaunchPreflightRequest} launchPreflightRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        preflightGuildFromBlueprint: async (blueprintId: string | null, launchPreflightRequest: LaunchPreflightRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'blueprintId' is not null or undefined
+            assertParamExists('preflightGuildFromBlueprint', 'blueprintId', blueprintId)
+            // verify required parameter 'launchPreflightRequest' is not null or undefined
+            assertParamExists('preflightGuildFromBlueprint', 'launchPreflightRequest', launchPreflightRequest)
+            const localVarPath = `/catalog/blueprints/{blueprint_id}/guilds/preflight`
+                .replace('{blueprint_id}', encodeURIComponent(String(blueprintId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(launchPreflightRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -5742,6 +6607,76 @@ export const GuildsApiAxiosParamCreator = function (configuration?: Configuratio
 export const GuildsApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = GuildsApiAxiosParamCreator(configuration)
     return {
+        /**
+         * 
+         * @summary Authorize an opaque launch OAuth requirement
+         * @param {string} preflightId 
+         * @param {string} requirementId 
+         * @param {LaunchOAuthActionRequest} launchOAuthActionRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async authorizeLaunchOAuth(preflightId: string, requirementId: string, launchOAuthActionRequest: LaunchOAuthActionRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthorizeResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authorizeLaunchOAuth(preflightId, requirementId, launchOAuthActionRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GuildsApi.authorizeLaunchOAuth']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Cancel Launch Preparation
+         * @param {string} preparationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async cancelLaunchPreparation(preparationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.cancelLaunchPreparation(preparationId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GuildsApi.cancelLaunchPreparation']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Configure an opaque launch secret requirement
+         * @param {string | null} preflightId 
+         * @param {string | null} requirementId 
+         * @param {LaunchSecretActionRequest} launchSecretActionRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async configureLaunchSecret(preflightId: string | null, requirementId: string | null, launchSecretActionRequest: LaunchSecretActionRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<LaunchRequirementConfiguredResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.configureLaunchSecret(preflightId, requirementId, launchSecretActionRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GuildsApi.configureLaunchSecret']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Create Launch Preparation
+         * @param {string} blueprintId 
+         * @param {LaunchPreparationRequest} launchPreparationRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async createLaunchPreparation(blueprintId: string, launchPreparationRequest: LaunchPreparationRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<LaunchPreparationResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.createLaunchPreparation(blueprintId, launchPreparationRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GuildsApi.createLaunchPreparation']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Get Launch Preparation
+         * @param {string | null} preparationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getLaunchPreparation(preparationId: string | null, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<LaunchPreparationResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getLaunchPreparation(preparationId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GuildsApi.getLaunchPreparation']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
         /**
          * Get the list of users added to a guild. This includes both active and inactive users.
          * @summary Get Guild Users
@@ -5771,6 +6706,20 @@ export const GuildsApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['GuildsApi.launchGuildFromBlueprint']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
+        /**
+         * 
+         * @summary Preflight Guild From Blueprint
+         * @param {string | null} blueprintId 
+         * @param {LaunchPreflightRequest} launchPreflightRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async preflightGuildFromBlueprint(blueprintId: string | null, launchPreflightRequest: LaunchPreflightRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<LaunchPreflightResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.preflightGuildFromBlueprint(blueprintId, launchPreflightRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['GuildsApi.preflightGuildFromBlueprint']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
     }
 };
 
@@ -5780,6 +6729,56 @@ export const GuildsApiFp = function(configuration?: Configuration) {
 export const GuildsApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
     const localVarFp = GuildsApiFp(configuration)
     return {
+        /**
+         * 
+         * @summary Authorize an opaque launch OAuth requirement
+         * @param {GuildsApiAuthorizeLaunchOAuthRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authorizeLaunchOAuth(requestParameters: GuildsApiAuthorizeLaunchOAuthRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthorizeResponse> {
+            return localVarFp.authorizeLaunchOAuth(requestParameters.preflightId, requestParameters.requirementId, requestParameters.launchOAuthActionRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Cancel Launch Preparation
+         * @param {GuildsApiCancelLaunchPreparationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        cancelLaunchPreparation(requestParameters: GuildsApiCancelLaunchPreparationRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.cancelLaunchPreparation(requestParameters.preparationId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Configure an opaque launch secret requirement
+         * @param {GuildsApiConfigureLaunchSecretRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        configureLaunchSecret(requestParameters: GuildsApiConfigureLaunchSecretRequest, options?: RawAxiosRequestConfig): AxiosPromise<LaunchRequirementConfiguredResponse> {
+            return localVarFp.configureLaunchSecret(requestParameters.preflightId, requestParameters.requirementId, requestParameters.launchSecretActionRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Create Launch Preparation
+         * @param {GuildsApiCreateLaunchPreparationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        createLaunchPreparation(requestParameters: GuildsApiCreateLaunchPreparationRequest, options?: RawAxiosRequestConfig): AxiosPromise<LaunchPreparationResponse> {
+            return localVarFp.createLaunchPreparation(requestParameters.blueprintId, requestParameters.launchPreparationRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Get Launch Preparation
+         * @param {GuildsApiGetLaunchPreparationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getLaunchPreparation(requestParameters: GuildsApiGetLaunchPreparationRequest, options?: RawAxiosRequestConfig): AxiosPromise<LaunchPreparationResponse> {
+            return localVarFp.getLaunchPreparation(requestParameters.preparationId, options).then((request) => request(axios, basePath));
+        },
         /**
          * Get the list of users added to a guild. This includes both active and inactive users.
          * @summary Get Guild Users
@@ -5800,8 +6799,63 @@ export const GuildsApiFactory = function (configuration?: Configuration, basePat
         launchGuildFromBlueprint(requestParameters: GuildsApiLaunchGuildFromBlueprintRequest, options?: RawAxiosRequestConfig): AxiosPromise<IdInfo> {
             return localVarFp.launchGuildFromBlueprint(requestParameters.blueprintId, requestParameters.launchGuildFromBlueprintRequest, requestParameters.sqldb, options).then((request) => request(axios, basePath));
         },
+        /**
+         * 
+         * @summary Preflight Guild From Blueprint
+         * @param {GuildsApiPreflightGuildFromBlueprintRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        preflightGuildFromBlueprint(requestParameters: GuildsApiPreflightGuildFromBlueprintRequest, options?: RawAxiosRequestConfig): AxiosPromise<LaunchPreflightResponse> {
+            return localVarFp.preflightGuildFromBlueprint(requestParameters.blueprintId, requestParameters.launchPreflightRequest, options).then((request) => request(axios, basePath));
+        },
     };
 };
+
+/**
+ * Request parameters for authorizeLaunchOAuth operation in GuildsApi.
+ */
+export interface GuildsApiAuthorizeLaunchOAuthRequest {
+    readonly preflightId: string
+
+    readonly requirementId: string
+
+    readonly launchOAuthActionRequest: LaunchOAuthActionRequest
+}
+
+/**
+ * Request parameters for cancelLaunchPreparation operation in GuildsApi.
+ */
+export interface GuildsApiCancelLaunchPreparationRequest {
+    readonly preparationId: string
+}
+
+/**
+ * Request parameters for configureLaunchSecret operation in GuildsApi.
+ */
+export interface GuildsApiConfigureLaunchSecretRequest {
+    readonly preflightId: string | null
+
+    readonly requirementId: string | null
+
+    readonly launchSecretActionRequest: LaunchSecretActionRequest
+}
+
+/**
+ * Request parameters for createLaunchPreparation operation in GuildsApi.
+ */
+export interface GuildsApiCreateLaunchPreparationRequest {
+    readonly blueprintId: string
+
+    readonly launchPreparationRequest: LaunchPreparationRequest
+}
+
+/**
+ * Request parameters for getLaunchPreparation operation in GuildsApi.
+ */
+export interface GuildsApiGetLaunchPreparationRequest {
+    readonly preparationId: string | null
+}
 
 /**
  * Request parameters for getUsersAddedToGuild operation in GuildsApi.
@@ -5824,9 +6878,73 @@ export interface GuildsApiLaunchGuildFromBlueprintRequest {
 }
 
 /**
+ * Request parameters for preflightGuildFromBlueprint operation in GuildsApi.
+ */
+export interface GuildsApiPreflightGuildFromBlueprintRequest {
+    readonly blueprintId: string | null
+
+    readonly launchPreflightRequest: LaunchPreflightRequest
+}
+
+/**
  * GuildsApi - object-oriented interface
  */
 export class GuildsApi extends BaseAPI {
+    /**
+     * 
+     * @summary Authorize an opaque launch OAuth requirement
+     * @param {GuildsApiAuthorizeLaunchOAuthRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public authorizeLaunchOAuth(requestParameters: GuildsApiAuthorizeLaunchOAuthRequest, options?: RawAxiosRequestConfig) {
+        return GuildsApiFp(this.configuration).authorizeLaunchOAuth(requestParameters.preflightId, requestParameters.requirementId, requestParameters.launchOAuthActionRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Cancel Launch Preparation
+     * @param {GuildsApiCancelLaunchPreparationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public cancelLaunchPreparation(requestParameters: GuildsApiCancelLaunchPreparationRequest, options?: RawAxiosRequestConfig) {
+        return GuildsApiFp(this.configuration).cancelLaunchPreparation(requestParameters.preparationId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Configure an opaque launch secret requirement
+     * @param {GuildsApiConfigureLaunchSecretRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public configureLaunchSecret(requestParameters: GuildsApiConfigureLaunchSecretRequest, options?: RawAxiosRequestConfig) {
+        return GuildsApiFp(this.configuration).configureLaunchSecret(requestParameters.preflightId, requestParameters.requirementId, requestParameters.launchSecretActionRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Create Launch Preparation
+     * @param {GuildsApiCreateLaunchPreparationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public createLaunchPreparation(requestParameters: GuildsApiCreateLaunchPreparationRequest, options?: RawAxiosRequestConfig) {
+        return GuildsApiFp(this.configuration).createLaunchPreparation(requestParameters.blueprintId, requestParameters.launchPreparationRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Get Launch Preparation
+     * @param {GuildsApiGetLaunchPreparationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public getLaunchPreparation(requestParameters: GuildsApiGetLaunchPreparationRequest, options?: RawAxiosRequestConfig) {
+        return GuildsApiFp(this.configuration).getLaunchPreparation(requestParameters.preparationId, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * Get the list of users added to a guild. This includes both active and inactive users.
      * @summary Get Guild Users
@@ -5847,6 +6965,17 @@ export class GuildsApi extends BaseAPI {
      */
     public launchGuildFromBlueprint(requestParameters: GuildsApiLaunchGuildFromBlueprintRequest, options?: RawAxiosRequestConfig) {
         return GuildsApiFp(this.configuration).launchGuildFromBlueprint(requestParameters.blueprintId, requestParameters.launchGuildFromBlueprintRequest, requestParameters.sqldb, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Preflight Guild From Blueprint
+     * @param {GuildsApiPreflightGuildFromBlueprintRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public preflightGuildFromBlueprint(requestParameters: GuildsApiPreflightGuildFromBlueprintRequest, options?: RawAxiosRequestConfig) {
+        return GuildsApiFp(this.configuration).preflightGuildFromBlueprint(requestParameters.blueprintId, requestParameters.launchPreflightRequest, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
@@ -7706,3 +8835,6 @@ export class UsersApi extends BaseAPI {
         return UsersApiFp(this.configuration).removeUserFromGuild(requestParameters.guildId, requestParameters.userId, requestParameters.sqldb, options).then((request) => request(this.axios, this.basePath));
     }
 }
+
+
+
