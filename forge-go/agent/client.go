@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -168,6 +169,12 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 	} else {
 		return fmt.Errorf("either --redis or --nats URL is required for distributed client mode")
 	}
+
+	metricsListener, err := net.Listen("tcp", config.MetricsAddr)
+	if err != nil {
+		return fmt.Errorf("start client metrics listener on %s: %w", config.MetricsAddr, err)
+	}
+	defer func() { _ = metricsListener.Close() }()
 
 	reqPayload := struct {
 		NodeID                  string                     `json:"node_id"`
@@ -337,8 +344,8 @@ func StartClient(ctx context.Context, config *ClientConfig) error {
 	}
 
 	go func() {
-		log.Info("Starting client metrics server", "address", config.MetricsAddr)
-		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Info("Starting client metrics server", "address", metricsListener.Addr().String())
+		if err := metricsServer.Serve(metricsListener); err != nil && err != http.ErrServerClosed {
 			log.Error("Metrics server failed", "error", err)
 		}
 	}()

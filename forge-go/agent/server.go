@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -382,13 +383,24 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 		return fmt.Errorf("initialize secure stores: %w", err)
 	}
 	defer httpServer.ClearSecureCaches()
+	serviceErr := make(chan error, 2)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		if err := httpServer.Start(serverCtx); err != nil {
 			l.Error("HTTP API exited with error", "error", err)
+			select {
+			case serviceErr <- err:
+			default:
+			}
+			return
 		}
-		l.Info("HTTP API Placeholder listening on", "address", cfg.ListenAddress)
+		if serverCtx.Err() == nil {
+			select {
+			case serviceErr <- fmt.Errorf("HTTP API exited unexpectedly"):
+			default:
+			}
+		}
 	}()
 
 	var (
@@ -443,18 +455,40 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 		go func() {
 			defer wg.Done()
 			if err := waitForServerReady(clientCtx, clientServerURL, 5*time.Second); err != nil {
-				if err != context.Canceled {
+				if !errors.Is(err, context.Canceled) {
 					l.Error("Failed waiting for server readiness before starting in-process client", "error", err)
+					select {
+					case serviceErr <- err:
+					default:
+					}
 				}
 				return
 			}
-			if err := StartClient(clientCtx, clientCfg); err != nil && err != context.Canceled {
-				l.Error("In-process client exited with error", "error", err)
+			if err := StartClient(clientCtx, clientCfg); err != nil {
+				if !errors.Is(err, context.Canceled) {
+					l.Error("In-process client exited with error", "error", err)
+					select {
+					case serviceErr <- err:
+					default:
+					}
+				}
+				return
+			}
+			if clientCtx.Err() == nil {
+				select {
+				case serviceErr <- fmt.Errorf("in-process client exited unexpectedly"):
+				default:
+				}
 			}
 		}()
 	}
 
-	<-serverCtx.Done()
+	var runErr error
+	select {
+	case <-serverCtx.Done():
+	case runErr = <-serviceErr:
+		cancelServer()
+	}
 
 	l.Info("Received cancellation signal. Commencing graceful shutdown...")
 	if cancelClient != nil {
@@ -467,7 +501,7 @@ func StartServer(ctx context.Context, cfg *ServerConfig) error {
 
 	wg.Wait()
 
-	return nil
+	return runErr
 }
 
 func dispatchAcceptedSpawn(ctx context.Context, controlPlane control.ControlPlane, placements *scheduler.PlacementMap, sched *scheduler.Scheduler, guildID, agentID string) error {

@@ -489,6 +489,14 @@ func (c *Coordinator) execute(item work) {
 	err := c.run(c.ctx, c.uvxPath, item.args, c.runtimeEnv())
 	duration := time.Since(start)
 
+	detail := map[string]any{"key": item.key, "cache_state": "uv", "duration_ms": duration.Milliseconds()}
+	if err != nil {
+		detail["error"] = err.Error()
+		c.emit(item.metadata, "dependency.prepare.failed", infraevents.SeverityError, "dependency preparation failed", detail)
+	} else {
+		c.emit(item.metadata, "dependency.prepare.completed", infraevents.SeverityInfo, "dependency preparation completed", detail)
+	}
+
 	c.mu.Lock()
 	delete(c.inflight, item.key)
 	if err == nil && c.ctx.Err() == nil {
@@ -496,14 +504,6 @@ func (c *Coordinator) execute(item work) {
 	}
 	item.preparation.complete(err)
 	c.mu.Unlock()
-
-	detail := map[string]any{"key": item.key, "cache_state": "uv", "duration_ms": duration.Milliseconds()}
-	if err != nil {
-		detail["error"] = err.Error()
-		c.emit(item.metadata, "dependency.prepare.failed", infraevents.SeverityError, "dependency preparation failed", detail)
-		return
-	}
-	c.emit(item.metadata, "dependency.prepare.completed", infraevents.SeverityInfo, "dependency preparation completed", detail)
 }
 
 func (c *Coordinator) runtimeEnv() []string {

@@ -423,6 +423,55 @@ func TestStartServer_FailsWhenEmbeddedRedisAddressOccupied(t *testing.T) {
 	require.Contains(t, err.Error(), "failed to start miniredis")
 }
 
+func TestStartServer_FailsWhenHTTPAddressOccupied(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { _ = ln.Close() }()
+
+	cfg := &ServerConfig{
+		DatabaseURL:        "file:testserveroccupiedhttp?mode=memory&cache=shared",
+		EmbeddedRedisAddr:  reserveLocalAddr(t),
+		ListenAddress:      ln.Addr().String(),
+		LeaderElectionMode: "redis",
+	}
+
+	err = StartServer(context.Background(), cfg)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "address already in use")
+}
+
+func TestStartServer_FailsWhenEmbeddedClientMetricsAddressOccupied(t *testing.T) {
+	metricsListener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { _ = metricsListener.Close() }()
+
+	regYaml := `
+entries:
+  - id: TestAgent
+    class_name: "test.Agent"
+    runtime: binary
+    executable: "/bin/echo"
+`
+	regPath := filepath.Join(t.TempDir(), "reg.yaml")
+	require.NoError(t, os.WriteFile(regPath, []byte(regYaml), 0o644))
+	t.Setenv("FORGE_AGENT_REGISTRY", regPath)
+
+	cfg := &ServerConfig{
+		DatabaseURL:        "file:testserveroccupiedmetrics?mode=memory&cache=shared",
+		EmbeddedRedisAddr:  reserveLocalAddr(t),
+		ListenAddress:      reserveLocalAddr(t),
+		LeaderElectionMode: "redis",
+		WithClient:         true,
+		ClientNodeID:       "embedded-node-occupied-metrics",
+		ClientMetricsAddr:  metricsListener.Addr().String(),
+	}
+
+	err = StartServer(context.Background(), cfg)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "start client metrics listener")
+	require.False(t, scheduler.GlobalNodeRegistry.IsHealthy("embedded-node-occupied-metrics"))
+}
+
 func reserveLocalAddr(t *testing.T) string {
 	t.Helper()
 

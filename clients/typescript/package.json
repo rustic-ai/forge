@@ -1,6 +1,6 @@
 {
   "name": "@rustic-ai/api-client",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "TypeScript client for the Rustic AI HTTP API, generated from its OpenAPI specification.",
   "license": "MIT",
   "repository": {
@@ -19,7 +19,7 @@
     "access": "public"
   },
   "scripts": {
-    "generate": "openapi-generator-cli generate",
+    "generate": "openapi-generator-cli generate && node scripts/patch-generated-client.cjs",
     "clean": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run clean && npm run build"

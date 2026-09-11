@@ -48,3 +48,9 @@ Generator settings live in `openapitools.json` (pinned generator version, input
 spec, options). Files that must not be produced inside `src/` are listed in
 `src/.openapi-generator-ignore`.
 
+The generate script also applies a checked compatibility annotation and return
+cast to `createRequestFunction`. Axios 1.19 and newer expose a private
+unique-symbol type through inference, so declaration builds require this
+generated function to retain its explicit public `Promise<R>` contract. The
+patch script fails if the upstream generator output changes, requiring the
+override to be reviewed.
