@@ -1,18 +1,18 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 from rustic_ai.core.agents.system.models import AgentLaunchRequest, ConflictResponse
 from rustic_ai.core.guild import AgentSpec
 from rustic_ai.core.guild.agent_ext.mixins.health import HeartbeatStatus
 from rustic_ai.core.guild.agent_ext.depends.dependency_resolver import DependencySpec
 from rustic_ai.core.guild.metastore.models import AgentStatus, GuildStatus
-from rustic_ai.core.guild.metaprog.agent_registry import AgentDependency, AgentRegistry
-
-import rustic_ai.forge.agents.system.guild_manager_agent as guild_manager_module
 from rustic_ai.forge.agents.system.guild_manager_agent import GuildManagerAgent
+from rustic_ai.forge.metastore.manager_client import ManagerAPIError
 
 
-def dynamic_manager(monkeypatch) -> GuildManagerAgent:
+def dynamic_manager() -> GuildManagerAgent:
     manager = object.__new__(GuildManagerAgent)
     manager.guild_spec = SimpleNamespace(
         properties={
@@ -46,21 +46,28 @@ def dynamic_manager(monkeypatch) -> GuildManagerAgent:
             ),
         },
     )
-    registry_entry = SimpleNamespace(
-        agent_dependencies=[
-            AgentDependency(dependency_key="llm", required_type="example.LLM"),
-            AgentDependency(
-                dependency_key="filesystem", required_type="example.Filesystem"
-            ),
-        ]
-    )
-    monkeypatch.setattr(guild_manager_module, "get_agent_class", lambda _: object)
-    monkeypatch.setattr(
-        AgentRegistry,
-        "get_agent",
-        classmethod(lambda _cls, _class_name: registry_entry),
-    )
+    manager.metastore = Mock()
+    manager.metastore.get_catalog_agent.return_value = {
+        "qualified_class_name": "example.Agent",
+        "agent_dependencies": [
+            {"dependency_key": "llm", "required_type": "example.LLM"},
+            {
+                "dependency_key": "filesystem",
+                "required_type": "example.Filesystem",
+            },
+        ],
+    }
     return manager
+
+
+def requested_agent() -> AgentSpec:
+    return AgentSpec(
+        id="reviewer-a",
+        name="Strict Reviewer",
+        description="Reviews an answer",
+        class_name="example.Agent",
+        properties={},
+    )
 
 
 def launch_request(
@@ -94,15 +101,9 @@ def test_dynamic_catalog_selector_reports_ambiguity_to_caller():
     assert len(GuildManagerAgent._match_catalog_profiles(profiles, "gpt")) == 2
 
 
-def test_dependency_materialization_preserves_requested_agent_identity(monkeypatch):
-    manager = dynamic_manager(monkeypatch)
-    requested = AgentSpec(
-        id="reviewer-a",
-        name="Strict Reviewer",
-        description="Reviews an answer",
-        class_name="example.Agent",
-        properties={},
-    )
+def test_dependency_materialization_preserves_requested_agent_identity():
+    manager = dynamic_manager()
+    requested = requested_agent()
 
     materialized, profile_keys = manager._materialize_dependency_selections(
         launch_request(
@@ -116,10 +117,11 @@ def test_dependency_materialization_preserves_requested_agent_identity(monkeypat
     assert materialized is not requested
     assert materialized.dependency_map["llm"].class_name == "example.Qwen"
     assert profile_keys == ["llm_qwen"]
+    manager.metastore.get_catalog_agent.assert_called_once_with("example.Agent")
 
 
-def test_dependency_materialization_preserves_generated_agent_id(monkeypatch):
-    manager = dynamic_manager(monkeypatch)
+def test_dependency_materialization_preserves_generated_agent_id():
+    manager = dynamic_manager()
     requested = AgentSpec(
         name="Generated Reviewer",
         description="Reviews an answer",
@@ -138,10 +140,8 @@ def test_dependency_materialization_preserves_generated_agent_id(monkeypatch):
     assert materialized.id == requested.id
 
 
-def test_multiple_profiles_are_order_independent_and_do_not_define_identity(
-    monkeypatch,
-):
-    manager = dynamic_manager(monkeypatch)
+def test_multiple_profiles_are_order_independent_and_do_not_define_identity():
+    manager = dynamic_manager()
     agent = AgentSpec(
         id="reviewer",
         name="Reviewer",
@@ -170,8 +170,8 @@ def test_multiple_profiles_are_order_independent_and_do_not_define_identity(
     assert first_profiles == second_profiles == ["filesystem_local", "llm_qwen"]
 
 
-def test_distinct_agents_can_share_the_same_profile(monkeypatch):
-    manager = dynamic_manager(monkeypatch)
+def test_distinct_agents_can_share_the_same_profile():
+    manager = dynamic_manager()
     selection = {"llm": {"catalog_key": "models", "selector": "llm_qwen"}}
 
     first, _ = manager._materialize_dependency_selections(
@@ -204,8 +204,8 @@ def test_distinct_agents_can_share_the_same_profile(monkeypatch):
     assert first.dependency_map == second.dependency_map
 
 
-def test_dynamic_launch_rejects_a_duplicate_agent_name(monkeypatch):
-    manager = dynamic_manager(monkeypatch)
+def test_dynamic_launch_rejects_a_duplicate_agent_name():
+    manager = dynamic_manager()
     existing = AgentSpec(
         id="reviewer-a",
         name="Reviewer",
@@ -221,7 +221,6 @@ def test_dynamic_launch_rejects_a_duplicate_agent_name(monkeypatch):
         properties={},
     )
     manager.guild = SimpleNamespace(list_agents=lambda: [existing])
-    manager.metastore = Mock()
     ctx = SimpleNamespace(
         payload=launch_request(
             requested,
@@ -237,6 +236,74 @@ def test_dynamic_launch_rejects_a_duplicate_agent_name(monkeypatch):
     assert response.error_field == "name"
     assert response.message == "Agent name already exists: Reviewer"
     manager.metastore.ensure_agent.assert_not_called()
+
+
+def test_dependency_materialization_rejects_mismatched_catalog_class():
+    manager = dynamic_manager()
+    manager.metastore.get_catalog_agent.return_value["qualified_class_name"] = (
+        "example.OtherAgent"
+    )
+
+    with pytest.raises(ValueError, match="does not match agent class"):
+        manager._materialize_dependency_selections(
+            launch_request(
+                requested_agent(),
+                {"llm": {"catalog_key": "models", "selector": "Qwen"}},
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "agent_dependencies",
+    [None, {}, [None], [{}], [{"dependency_key": "llm", "required_type": 1}]],
+)
+def test_dependency_materialization_rejects_malformed_catalog_metadata(
+    agent_dependencies,
+):
+    manager = dynamic_manager()
+    manager.metastore.get_catalog_agent.return_value["agent_dependencies"] = (
+        agent_dependencies
+    )
+
+    with pytest.raises(ValueError, match="Catalog metadata .* is invalid"):
+        manager._materialize_dependency_selections(
+            launch_request(
+                requested_agent(),
+                {"llm": {"catalog_key": "models", "selector": "Qwen"}},
+            )
+        )
+
+
+def test_dependency_materialization_rejects_missing_or_mismatched_declaration():
+    manager = dynamic_manager()
+    selection = {"llm": {"catalog_key": "models", "selector": "Qwen"}}
+
+    manager.metastore.get_catalog_agent.return_value["agent_dependencies"] = []
+    with pytest.raises(ValueError, match="does not match the requested agent type"):
+        manager._materialize_dependency_selections(
+            launch_request(requested_agent(), selection)
+        )
+
+    manager.metastore.get_catalog_agent.return_value["agent_dependencies"] = [
+        {"dependency_key": "llm", "required_type": "example.OtherLLM"}
+    ]
+    with pytest.raises(ValueError, match="does not match the requested agent type"):
+        manager._materialize_dependency_selections(
+            launch_request(requested_agent(), selection)
+        )
+
+
+def test_dependency_materialization_propagates_catalog_api_failure():
+    manager = dynamic_manager()
+    manager.metastore.get_catalog_agent.side_effect = ManagerAPIError("not found")
+
+    with pytest.raises(ManagerAPIError, match="not found"):
+        manager._materialize_dependency_selections(
+            launch_request(
+                requested_agent(),
+                {"llm": {"catalog_key": "models", "selector": "Qwen"}},
+            )
+        )
 
 
 def test_existing_agent_id_is_not_a_name_conflict():

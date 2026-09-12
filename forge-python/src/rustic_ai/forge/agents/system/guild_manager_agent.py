@@ -44,7 +44,6 @@ from rustic_ai.core.guild.builders import AgentBuilder, GuildBuilder, GuildHelpe
 from rustic_ai.core.guild.dsl import GuildSpec
 from rustic_ai.core.guild.guild import Guild
 from rustic_ai.core.guild.metastore.models import AgentStatus, GuildStatus
-from rustic_ai.core.guild.metaprog.agent_registry import AgentRegistry
 from rustic_ai.core.state.manager.state_manager import StateManager
 from rustic_ai.core.state.models import (
     StateFetchError,
@@ -56,7 +55,7 @@ from rustic_ai.core.state.models import (
     StateUpdateResponse,
 )
 from rustic_ai.core.utils.basic_class_utils import get_qualified_class_name
-from rustic_ai.core.utils.class_utils import get_agent_class, get_state_manager
+from rustic_ai.core.utils.class_utils import get_state_manager
 from rustic_ai.core.utils.priority import Priority
 
 from rustic_ai.forge.agents.system.guild_manager_agent_props import (
@@ -335,10 +334,34 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
         catalogs = self.guild_spec.properties.get("dependency_selections", {})
         resolved_profile_keys: list[str] = []
 
-        get_agent_class(agent_spec.class_name)
-        registry_entry = AgentRegistry.get_agent(agent_spec.class_name)
-        if registry_entry is None:
-            raise ValueError(f"Agent class {agent_spec.class_name!r} is not registered")
+        catalog_agent = self.metastore.get_catalog_agent(agent_spec.class_name)
+        if catalog_agent.get("qualified_class_name") != agent_spec.class_name:
+            raise ValueError(
+                f"Catalog metadata does not match agent class {agent_spec.class_name!r}"
+            )
+        agent_dependencies = catalog_agent.get("agent_dependencies")
+        if not isinstance(agent_dependencies, list):
+            raise ValueError(
+                f"Catalog metadata for agent class {agent_spec.class_name!r} is invalid"
+            )
+
+        declared_dependencies: dict[str, Optional[str]] = {}
+        for dependency in agent_dependencies:
+            if not isinstance(dependency, dict):
+                raise ValueError(
+                    f"Catalog metadata for agent class {agent_spec.class_name!r} is invalid"
+                )
+            dependency_key = dependency.get("dependency_key")
+            required_type = dependency.get("required_type")
+            if not isinstance(dependency_key, str) or not dependency_key:
+                raise ValueError(
+                    f"Catalog metadata for agent class {agent_spec.class_name!r} is invalid"
+                )
+            if required_type is not None and not isinstance(required_type, str):
+                raise ValueError(
+                    f"Catalog metadata for agent class {agent_spec.class_name!r} is invalid"
+                )
+            declared_dependencies[dependency_key] = required_type
 
         for dependency_key in sorted(request.dependency_selections):
             selection = request.dependency_selections[dependency_key]
@@ -353,15 +376,10 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
                 )
 
             required_type = catalog.get("required_type")
-            declared = next(
-                (
-                    dependency
-                    for dependency in registry_entry.agent_dependencies
-                    if dependency.dependency_key == dependency_key
-                ),
-                None,
-            )
-            if declared is None or declared.required_type != required_type:
+            if (
+                dependency_key not in declared_dependencies
+                or declared_dependencies[dependency_key] != required_type
+            ):
                 raise ValueError(
                     f"Dependency {dependency_key!r} does not match the requested agent type"
                 )
