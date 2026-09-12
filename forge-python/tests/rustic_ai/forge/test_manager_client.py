@@ -123,3 +123,31 @@ def test_manager_client_raises_on_error_status():
 
     with pytest.raises(ManagerAPIError):
         metastore.get_guild_spec("g-1")
+
+
+def test_manager_client_gets_catalog_agent_with_encoded_class_name():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["raw_path"] = request.url.raw_path
+        captured["headers"] = dict(request.headers)
+        return httpx.Response(
+            200,
+            json={
+                "qualified_class_name": "example.Agent/variant",
+                "agent_dependencies": [],
+            },
+        )
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="http://forge.test"
+    )
+    metastore = ManagerMetastoreClient("http://forge.test", token="tkn", client=client)
+
+    response = metastore.get_catalog_agent("example.Agent/variant")
+
+    assert response["qualified_class_name"] == "example.Agent/variant"
+    assert captured["method"] == "GET"
+    assert captured["raw_path"] == b"/catalog/agents/example.Agent%2Fvariant"
+    assert captured["headers"]["x-forge-manager-token"] == "tkn"

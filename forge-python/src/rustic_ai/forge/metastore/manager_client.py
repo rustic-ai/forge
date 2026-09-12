@@ -60,6 +60,10 @@ class ManagerMetastoreClient:
         gid = quote(guild_id, safe="")
         return self._request("GET", f"/manager/guilds/{gid}/spec")
 
+    def get_catalog_agent(self, class_name: str) -> dict[str, Any]:
+        encoded_class_name = quote(class_name, safe="")
+        return self._request("GET", f"/catalog/agents/{encoded_class_name}")
+
     def update_guild_status(self, guild_id: str, status: GuildStatus) -> dict[str, Any]:
         gid = quote(guild_id, safe="")
         payload = {"status": _enum_wire_value(status)}
