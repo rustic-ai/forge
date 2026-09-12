@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-import hashlib
 import logging
-import re
 from typing import List, Optional
 
 from rustic_ai.core.agents.commons.message_formats import ErrorMessage
@@ -268,6 +266,18 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
         aar = ctx.payload
         agent_spec, profile_keys = self._materialize_dependency_selections(aar)
+        conflicting_agent = self._find_agent_name_conflict(
+            self.guild.list_agents(), agent_spec
+        )
+        if conflicting_agent is not None:
+            ctx.send(
+                ConflictResponse(
+                    error_field="name",
+                    message=f"Agent name already exists: {agent_spec.name}",
+                )
+            )
+            return
+
         ensure_response = self.metastore.ensure_agent(
             self.guild_id, agent_spec, profile_keys
         )
@@ -301,6 +311,20 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
         )
         self._announce_guild_refresh(ctx)
 
+    @staticmethod
+    def _find_agent_name_conflict(
+        existing_agents: List[AgentSpec], requested_agent: AgentSpec
+    ) -> Optional[AgentSpec]:
+        return next(
+            (
+                existing
+                for existing in existing_agents
+                if existing.name == requested_agent.name
+                and existing.id != requested_agent.id
+            ),
+            None,
+        )
+
     def _materialize_dependency_selections(
         self, request: AgentLaunchRequest
     ) -> tuple[AgentSpec, list[str]]:
@@ -309,14 +333,15 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
 
         agent_spec = request.agent_spec.model_copy(deep=True)
         catalogs = self.guild_spec.properties.get("dependency_selections", {})
-        resolved_profiles: list[tuple[str, dict]] = []
+        resolved_profile_keys: list[str] = []
 
         get_agent_class(agent_spec.class_name)
         registry_entry = AgentRegistry.get_agent(agent_spec.class_name)
         if registry_entry is None:
             raise ValueError(f"Agent class {agent_spec.class_name!r} is not registered")
 
-        for dependency_key, selection in request.dependency_selections.items():
+        for dependency_key in sorted(request.dependency_selections):
+            selection = request.dependency_selections[dependency_key]
             catalog = catalogs.get(selection.catalog_key)
             if not isinstance(catalog, dict):
                 raise ValueError(
@@ -357,19 +382,9 @@ class GuildManagerAgent(Agent[GuildManagerAgentProps]):
             if dependency_spec is None:
                 raise ValueError(f"Dependency snapshot {snapshot_key!r} is missing")
             agent_spec.dependency_map[dependency_key] = dependency_spec
-            resolved_profiles.append((profile_key, profile))
+            resolved_profile_keys.append(profile_key)
 
-        identity_key, identity_profile = resolved_profiles[0]
-        digest = hashlib.sha256(identity_key.encode("utf-8")).hexdigest()[:8]
-        safe_key = re.sub(r"[^A-Za-z0-9_-]+", "-", identity_key).strip("-")
-        agent_spec.id = f"dynamic-{safe_key[:36]}-{digest}"
-
-        base_name = str(identity_profile.get("display_name") or identity_key)
-        used_names = {agent.name.casefold() for agent in self.guild_spec.agents}
-        agent_spec.name = base_name
-        if agent_spec.name.casefold() in used_names:
-            agent_spec.name = f"{base_name} ({digest})"
-        return agent_spec, [profile_key for profile_key, _ in resolved_profiles]
+        return agent_spec, resolved_profile_keys
 
     @staticmethod
     def _match_catalog_profiles(

@@ -224,6 +224,18 @@ func TestLaunchBlueprint_RendersConfiguration(t *testing.T) {
 		}
 	})
 
+	t.Run("configuration values use JSON rather than HTML escaping", func(t *testing.T) {
+		prompt := "R&D <team> says \"quoted\" at C:\\models\\new\nNext line"
+		gs := launch(t, map[string]any{
+			"agent1":        prompt,
+			"model_id":      "m",
+			"model_version": 1,
+		})
+		if gs.Agents[0].Name != prompt {
+			t.Errorf("agent name = %q, want verbatim %q", gs.Agents[0].Name, prompt)
+		}
+	})
+
 	t.Run("ill-typed configuration override is rejected", func(t *testing.T) {
 		guildID := "invalid-configuration"
 		body, _ := json.Marshal(LaunchGuildFromBlueprintRequest{
@@ -241,66 +253,4 @@ func TestLaunchBlueprint_RendersConfiguration(t *testing.T) {
 			t.Errorf("ill-typed config: want 422, got %d: %s", lrr.Code, lrr.Body.String())
 		}
 	})
-}
-
-// TestLaunchBlueprint_ConfigValueHTMLEscaping documents a bug shared by the Go
-// (cbroglie/mustache) and Python (chevron) renderers: because substitution runs
-// over a JSON-serialized spec with default mustache HTML-escaping, a config
-// value containing & < > is corrupted (e.g. "R&D" -> "R&amp;D"). Skipped until
-// the escaping is fixed in BOTH renderers (fixing only one breaks Go/Python
-// render parity). See guild.resolveTemplates and core builders._from_spec_dict.
-func TestLaunchBlueprint_ConfigValueHTMLEscaping(t *testing.T) {
-	t.Skip("known shared bug: mustache/chevron HTML-escape config values (& < >); must be fixed in both renderers for parity")
-
-	db, err := store.NewGormStore("sqlite", "file::memory:")
-	if err != nil {
-		t.Fatalf("init db: %v", err)
-	}
-	if err := db.RegisterAgent(&store.CatalogAgentEntry{
-		QualifiedClassName: "test.agents.SimpleAgentWithProps",
-		AgentName:          "SimpleAgentWithProps",
-		AgentPropsSchema:   store.JSONB{"type": "object"},
-		MessageHandlers:    store.JSONB{},
-	}); err != nil {
-		t.Fatalf("register agent: %v", err)
-	}
-	mux := http.NewServeMux()
-	RegisterCatalogRoutes(mux, db)
-
-	createBody, _ := json.Marshal(BlueprintCreateRequest{
-		Name:     "vars bp",
-		Exposure: store.ExposurePublic,
-		AuthorID: "author-1",
-		Spec:     varBlueprintSpec(),
-	})
-	req, _ := http.NewRequest("POST", "/catalog/blueprints", bytes.NewBuffer(createBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
-	var created struct {
-		ID string `json:"id"`
-	}
-	_ = json.NewDecoder(rr.Body).Decode(&created)
-
-	body, _ := json.Marshal(LaunchGuildFromBlueprintRequest{
-		GuildName:     "Launched Guild",
-		UserID:        "user-1",
-		OrgID:         "org-1",
-		Configuration: map[string]any{"agent1": "R&D <team>", "model_id": "m", "model_version": 1},
-	})
-	lreq, _ := http.NewRequest("POST", "/catalog/blueprints/"+created.ID+"/guilds", bytes.NewBuffer(body))
-	lreq.Header.Set("Content-Type", "application/json")
-	lrr := httptest.NewRecorder()
-	mux.ServeHTTP(lrr, lreq)
-	var launched struct {
-		ID string `json:"id"`
-	}
-	_ = json.NewDecoder(lrr.Body).Decode(&launched)
-	gm, _ := db.GetGuild(launched.ID)
-	gs := store.ToGuildSpec(gm)
-
-	// The value must survive verbatim, NOT HTML-escaped to "R&amp;D &lt;team&gt;".
-	if gs.Agents[0].Name != "R&D <team>" {
-		t.Errorf("agent name = %q, want verbatim %q (HTML-escaping corruption)", gs.Agents[0].Name, "R&D <team>")
-	}
 }

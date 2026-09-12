@@ -807,7 +807,7 @@ wheels = [
 
 [[package]]
 name = "rusticai-core"
-version = "1.3.0"
+version = "1.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -830,14 +830,14 @@ dependencies = [
     { name = "types-python-dateutil" },
     { name = "types-pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/f3/2cc0dd2a7631cf4a867fe0035dd07949f7459fd7def40d217a23e4749090/rusticai_core-1.3.0.tar.gz", hash = "sha256:b34094054aa761ee0f52104c6550ceffe5535c18d53d4185adc7f80afdc04125", size = 208264, upload-time = "2026-07-21T02:04:56.196Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c1/c5/00488007b3eb2ff9caab07bb69ffb3aa6c053adc9a8bd02c9a027fc82f99/rusticai_core-1.4.1.tar.gz", hash = "sha256:4f003eab27107116aeb11d6cdd07dfb1f0c9a24a3293cebd2a0ef86b82b2851f", size = 209071, upload-time = "2026-09-12T15:22:27.802Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/f4/58743aaeaca09cd087dd2702279100856371e78ef0180dd6cb5d49afa0f0/rusticai_core-1.3.0-py3-none-any.whl", hash = "sha256:2841d57520a8ae790d2a9d712b36513b381612ef36f5e1e542ecca5142bf741f", size = 299827, upload-time = "2026-07-21T02:04:57.377Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/e3/9914229cf4f27acb7da61db77bcfa7b2997999c22aa5c9b48e80200c6992/rusticai_core-1.4.1-py3-none-any.whl", hash = "sha256:331d57396d35dac6446077d6187177c19633f31f0202aef7ccabf94f8e9e71f8", size = 300769, upload-time = "2026-09-12T15:22:28.852Z" },
 ]
 
 [[package]]
 name = "rusticai-forge"
-version = "0.7.4"
+version = "0.7.5"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -860,7 +860,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1,<1.0.0" },
     { name = "nats-py", specifier = ">=2.9.0,<3.0.0" },
     { name = "pyzmq", specifier = ">=26.0.0,<28.0.0" },
-    { name = "rusticai-core", specifier = ">=1.3.0,<2.0.0" },
+    { name = "rusticai-core", specifier = ">=1.4.1,<2.0.0" },
     { name = "rusticai-redis", specifier = ">=1.1.0,<2.0.0" },
 ]
 
@@ -874,15 +874,15 @@ dev = [
 
 [[package]]
 name = "rusticai-redis"
-version = "1.3.0"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "redis", extra = ["hiredis"] },
     { name = "rusticai-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/04/d83903579817c1f8ccecfc6238386ea842650bcca30d4f6e109125f88f39/rusticai_redis-1.3.0.tar.gz", hash = "sha256:eb4161184b1f86a3c0ca15d671b994b24d4675efcbe96e7687a2a8c344a2a84f", size = 13910, upload-time = "2026-07-21T02:05:02.46Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/48/1c/918bba40d309fa9e5d558af60b1df7a0d052341732800e04fe1e4fc5e2fa/rusticai_redis-1.4.0.tar.gz", hash = "sha256:a7aa2548c18dbf57112d29d574461a2c5f182c5705685a1d128704aece919987", size = 13911, upload-time = "2026-08-29T03:41:57.256Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/24/7a25eaf8bf74c5e0c8c6783a7d7bfa9ee6828b4eb63fbe065b24f372e2b7/rusticai_redis-1.3.0-py3-none-any.whl", hash = "sha256:359215a5843dc092dbd90219294e73bc8d4841add195deb88c022c14ae57aba0", size = 18244, upload-time = "2026-07-21T02:05:03.21Z" },
+    { url = "https://files.pythonhosted.org/packages/92/b2/3281e113312a1100886bee71b0e0f3dc1ec99fbc698c96192d987de6a0bd/rusticai_redis-1.4.0-py3-none-any.whl", hash = "sha256:d7aba9e086204bf38d4ce6fcf38fd5e35467a08327b87db7fdbae4593c28c1e6", size = 18246, upload-time = "2026-08-29T03:41:58.189Z" },
 ]
 
 [[package]]

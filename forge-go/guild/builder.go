@@ -402,6 +402,7 @@ func (b *GuildBuilder) resolveTemplates() error {
 	if len(b.spec.Configuration) == 0 {
 		return nil
 	}
+	templateContext := jsonEscapeTemplateValues(b.spec.Configuration)
 
 	for i, agent := range b.spec.Agents {
 		agentBytes, err := json.Marshal(agent)
@@ -409,7 +410,7 @@ func (b *GuildBuilder) resolveTemplates() error {
 			return fmt.Errorf("failed to marshal agent %s for templating: %w", agent.Name, err)
 		}
 
-		renderedStr, err := mustache.Render(string(agentBytes), b.spec.Configuration)
+		renderedStr, err := mustache.RenderRaw(string(agentBytes), true, templateContext)
 		if err != nil {
 			return fmt.Errorf("failed to render mustache template for agent %s: %w", agent.Name, err)
 		}
@@ -429,7 +430,7 @@ func (b *GuildBuilder) resolveTemplates() error {
 				return fmt.Errorf("failed to marshal routing rule for templating: %w", err)
 			}
 
-			renderedStr, err := mustache.Render(string(ruleBytes), b.spec.Configuration)
+			renderedStr, err := mustache.RenderRaw(string(ruleBytes), true, templateContext)
 			if err != nil {
 				return fmt.Errorf("failed to render mustache template for routing rule: %w", err)
 			}
@@ -444,4 +445,26 @@ func (b *GuildBuilder) resolveTemplates() error {
 	}
 
 	return nil
+}
+
+func jsonEscapeTemplateValues(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case string:
+		encoded, _ := json.Marshal(typed)
+		return string(encoded[1 : len(encoded)-1])
+	case map[string]interface{}:
+		result := make(map[string]interface{}, len(typed))
+		for key, entry := range typed {
+			result[key] = jsonEscapeTemplateValues(entry)
+		}
+		return result
+	case []interface{}:
+		result := make([]interface{}, len(typed))
+		for index, entry := range typed {
+			result[index] = jsonEscapeTemplateValues(entry)
+		}
+		return result
+	default:
+		return value
+	}
 }

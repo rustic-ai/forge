@@ -1,6 +1,6 @@
 {
   "name": "@rustic-ai/api-client",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "TypeScript client for the Rustic AI HTTP API, generated from its OpenAPI specification.",
   "license": "MIT",
   "repository": {
